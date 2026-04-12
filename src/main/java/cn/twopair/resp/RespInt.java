@@ -12,5 +12,5 @@ import lombok.Getter;
 @Getter
 @AllArgsConstructor
 public class RespInt implements Resp {
-	private final long value;
+	private final int value;
 }

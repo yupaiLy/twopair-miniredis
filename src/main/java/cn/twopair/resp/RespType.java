@@ -8,7 +8,7 @@ package cn.twopair.resp;
  */
 public enum RespType {
 	// 简单字符串类型
-	STRING('+'),
+	STATUS('+'),
 	// 错误类型
 	ERROR('-'),
 	// 负号
