@@ -14,12 +14,12 @@ import lombok.Getter;
 @AllArgsConstructor
 public class BulkString implements Resp {
 	/**
-	 * 没有值
+	 * 空值 块字符串，对应$-1\r\n\r\n
 	 */
 	public static final BulkString NIL = new BulkString(null);
 	/**
 	 * 内容
 	 */
-	private final BytesWrapper content;
+	private final BytesWrapper bytesWrapper;
 
 }

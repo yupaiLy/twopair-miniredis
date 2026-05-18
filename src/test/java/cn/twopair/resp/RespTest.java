@@ -73,12 +73,12 @@ public class RespTest {
 		// 4. 测试普通 BulkString
 		ByteBuf bulkBuffer = Unpooled.copiedBuffer("$4\r\nname\r\n", StandardCharsets.UTF_8);
 		BulkString bulkString = (BulkString) Resp.decode(bulkBuffer);
-		Assert.assertEquals("name", bulkString.getContent().toUtf8String());
+		Assert.assertEquals("name", bulkString.getBytesWrapper().toUtf8String());
 
 		// 5. 测试空 BulkString
 		ByteBuf emptyBulkBuffer = Unpooled.copiedBuffer("$0\r\n\r\n", StandardCharsets.UTF_8);
 		BulkString emptyBulkString = (BulkString) Resp.decode(emptyBulkBuffer);
-		Assert.assertEquals("", emptyBulkString.getContent().toUtf8String());
+		Assert.assertEquals("", emptyBulkString.getBytesWrapper().toUtf8String());
 
 		// 6. 测试 Null BulkString
 		ByteBuf nullBulkBuffer = Unpooled.copiedBuffer("$-1\r\n", StandardCharsets.UTF_8);
@@ -92,9 +92,9 @@ public class RespTest {
 		);
 		RespArray respArray = (RespArray) Resp.decode(arrayBuffer);
 		Assert.assertEquals(3, respArray.getArray().length);
-		Assert.assertEquals("SET", ((BulkString) respArray.getArray()[0]).getContent().toUtf8String());
-		Assert.assertEquals("name", ((BulkString) respArray.getArray()[1]).getContent().toUtf8String());
-		Assert.assertEquals("twopair", ((BulkString) respArray.getArray()[2]).getContent().toUtf8String());
+		Assert.assertEquals("SET", ((BulkString) respArray.getArray()[0]).getBytesWrapper().toUtf8String());
+		Assert.assertEquals("name", ((BulkString) respArray.getArray()[1]).getBytesWrapper().toUtf8String());
+		Assert.assertEquals("twopair", ((BulkString) respArray.getArray()[2]).getBytesWrapper().toUtf8String());
 
 		// 8. 测试不完整 BulkString 应抛异常
 		try {
@@ -104,6 +104,51 @@ public class RespTest {
 		} catch (IllegalStateException e) {
 			Assert.assertNotNull(e);
 		}
+	}
+
+	@Test
+	public void testEncode() {
+		ByteBuf buffer;
+
+		// 1. SimpleString
+		buffer = Unpooled.buffer();
+		Resp.encode(new SimpleString("OK"), buffer);
+		Assert.assertEquals("+OK\r\n", buffer.toString(StandardCharsets.UTF_8));
+
+		// 2. Errors
+		buffer = Unpooled.buffer();
+		Resp.encode(new Errors("ERR unknown command"), buffer);
+		Assert.assertEquals("-ERR unknown command\r\n", buffer.toString(StandardCharsets.UTF_8));
+
+		// 3. RespInt
+		buffer = Unpooled.buffer();
+		Resp.encode(new RespInt(100), buffer);
+		Assert.assertEquals(":100\r\n", buffer.toString(StandardCharsets.UTF_8));
+
+		// 4. BulkString
+		buffer = Unpooled.buffer();
+		Resp.encode(new BulkString(new BytesWrapper("name".getBytes(StandardCharsets.UTF_8))), buffer);
+		Assert.assertEquals("$4\r\nname\r\n", buffer.toString(StandardCharsets.UTF_8));
+
+		// 5. Empty BulkString
+		buffer = Unpooled.buffer();
+		Resp.encode(new BulkString(new BytesWrapper("".getBytes(StandardCharsets.UTF_8))), buffer);
+		Assert.assertEquals("$0\r\n\r\n", buffer.toString(StandardCharsets.UTF_8));
+
+		// 6. Null BulkString
+		buffer = Unpooled.buffer();
+		Resp.encode(BulkString.NIL, buffer);
+		Assert.assertEquals("$-1\r\n", buffer.toString(StandardCharsets.UTF_8));
+
+		// 7. RespArray
+		buffer = Unpooled.buffer();
+		Resp.encode(new RespArray(new Resp[]{
+				new BulkString(new BytesWrapper("SET".getBytes(StandardCharsets.UTF_8))),
+				new BulkString(new BytesWrapper("name".getBytes(StandardCharsets.UTF_8))),
+				new BulkString(new BytesWrapper("twopair".getBytes(StandardCharsets.UTF_8)))
+		}), buffer);
+		Assert.assertEquals("*3\r\n$3\r\nSET\r\n$4\r\nname\r\n$7\r\ntwopair\r\n",
+				buffer.toString(StandardCharsets.UTF_8));
 	}
 
 

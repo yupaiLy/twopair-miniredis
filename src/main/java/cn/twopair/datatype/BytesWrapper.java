@@ -10,7 +10,7 @@ import java.util.Arrays;
  * @twopair
  */
 public class BytesWrapper implements Comparable<BytesWrapper> {
-	static final Charset CHARSET = StandardCharsets.UTF_8;
+	public static final Charset CHARSET = StandardCharsets.UTF_8;
 	private final byte[] content;
 
 	public BytesWrapper(byte[] content) {

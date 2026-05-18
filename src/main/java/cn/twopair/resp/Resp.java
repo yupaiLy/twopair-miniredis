@@ -3,6 +3,8 @@ package cn.twopair.resp;
 import cn.twopair.datatype.BytesWrapper;
 import io.netty.buffer.ByteBuf;
 
+import static cn.twopair.datatype.BytesWrapper.CHARSET;
+
 /**
  * @author ljj
  * @description RESP协议对象顶层抽象
@@ -11,6 +13,67 @@ import io.netty.buffer.ByteBuf;
  */
 public interface Resp {
 	//todo 先建 RESP 类型体系，暂不支持中文
+
+	static void encode(Resp resp, ByteBuf buffer) {
+		if (resp instanceof SimpleString) {
+			buffer.writeByte(RespType.STATUS.getCode());
+			String content = ((SimpleString) resp).getContent();
+			buffer.writeBytes(content.getBytes(CHARSET));
+			buffer.writeByte(RespType.R.getCode());
+			buffer.writeByte(RespType.N.getCode());
+		} else if (resp instanceof Errors) {
+			buffer.writeByte(RespType.ERROR.getCode());
+			String content = ((Errors) resp).getContent();
+			buffer.writeBytes(content.getBytes(CHARSET));
+			buffer.writeByte(RespType.R.getCode());
+			buffer.writeByte(RespType.N.getCode());
+		} else if (resp instanceof RespInt) {
+			buffer.writeByte(RespType.INTEGER.getCode());
+			int value = ((RespInt) resp).getValue();
+			buffer.writeBytes(String.valueOf(value).getBytes(CHARSET));
+			buffer.writeByte(RespType.R.getCode());
+			buffer.writeByte(RespType.N.getCode());
+		} else if (resp instanceof BulkString) {
+			buffer.writeByte(RespType.BULK_STRING.getCode());
+			BytesWrapper bytesWrapper = ((BulkString) resp).getBytesWrapper();
+			if (bytesWrapper == null) {
+				buffer.writeBytes("-1".getBytes(CHARSET));
+				buffer.writeByte(RespType.R.getCode());
+				buffer.writeByte(RespType.N.getCode());
+			} else if (bytesWrapper.getByteArray().length == 0) {
+				buffer.writeByte(RespType.ZERO.getCode());
+				buffer.writeByte(RespType.R.getCode());
+				buffer.writeByte(RespType.N.getCode());
+				buffer.writeByte(RespType.R.getCode());
+				buffer.writeByte(RespType.N.getCode());
+			} else {
+				buffer.writeBytes(String.valueOf(bytesWrapper.getByteArray().length).getBytes(CHARSET));
+				buffer.writeByte(RespType.R.getCode());
+				buffer.writeByte(RespType.N.getCode());
+				buffer.writeBytes(bytesWrapper.getByteArray());
+				buffer.writeByte(RespType.R.getCode());
+				buffer.writeByte(RespType.N.getCode());
+			}
+		} else if (resp instanceof RespArray) {
+			buffer.writeByte(RespType.ARRAY.getCode());
+			Resp[] array = ((RespArray) resp).getArray();
+			if (array == null) {
+				buffer.writeBytes("-1".getBytes(CHARSET));
+				buffer.writeByte(RespType.R.getCode());
+				buffer.writeByte(RespType.N.getCode());
+			} else {
+				buffer.writeBytes(String.valueOf(array.length).getBytes(CHARSET));
+				buffer.writeByte(RespType.R.getCode());
+				buffer.writeByte(RespType.N.getCode());
+				for (Resp r : array) {
+					encode(r, buffer);
+				}
+			}
+		} else {
+			throw new IllegalStateException("未知RESP类型: " + resp.getClass().getName());
+		}
+	}
+
 
 	static Resp decode(ByteBuf buffer) {
 		if (buffer.readableBytes() <= 0) {
@@ -45,8 +108,12 @@ public interface Resp {
 			return new BulkString(new BytesWrapper(bytes));
 		} else if (tyte == RespType.ARRAY.getCode()) {
 			int length = getNumber(buffer);
+
+			if (length == -1) {
+				return RespArray.NIL;
+			}
 			if (length < 0) {
-				throw new IllegalStateException("数组长度不能小于0");
+				throw new IllegalStateException("Array长度非法");
 			}
 			Resp[] array = new Resp[length];
 			for (int i = 0; i < length; i++) {
