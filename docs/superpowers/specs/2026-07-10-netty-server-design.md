@@ -16,14 +16,14 @@
 
 ## 2. 架构与数据流
 
-服务端采用职责单一的三段式 Netty Pipeline：
+服务端采用职责单一的三段式 Netty Pipeline。需要区分“逻辑数据流”和“Netty 注册顺序”：出站事件从当前 Handler 向 Pipeline 前方传播，因此编码器必须注册在业务 Handler 前面。
 
 ```text
-客户端 ByteBuf
-    -> RespDecoder
-    -> CommandHandler
-    -> RespEncoder
-    -> 客户端 ByteBuf
+Pipeline 注册顺序（head -> tail）
+    RespDecoder -> RespEncoder -> CommandHandler
+
+入站逻辑：客户端 ByteBuf -> RespDecoder -> CommandHandler
+出站逻辑：CommandHandler -> RespEncoder -> 客户端 ByteBuf
 ```
 
 ### 2.1 `RespDecoder`
@@ -89,7 +89,7 @@ Resp.encode(resp, out);
 - 创建 boss 和 worker `NioEventLoopGroup`；
 - 创建唯一的 `RedisCoreImpl`；
 - 使用 `ServerBootstrap` 和 `NioServerSocketChannel` 绑定 `6378`；
-- 为每条连接依次添加 `RespDecoder`、`CommandHandler`、`RespEncoder`；
+- 为每条连接依次添加 `RespDecoder`、`RespEncoder`、`CommandHandler`；
 - 在关闭时调用 `shutdownGracefully()` 释放线程资源。
 
 `Main` 改为创建并启动 `RedisServer`，删除 IDE 生成的 Hello World 示例代码。
