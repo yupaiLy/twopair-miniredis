@@ -35,8 +35,4 @@ public enum RespType {
 		this.code = code;
 	}
 
-	public char getCode() {
-		return code;
-	}
-
 }

@@ -74,20 +74,42 @@ public interface Resp {
 		}
 	}
 
+	/**
+	 * Attempts to decode a RESP (REdis Serialization Protocol) message from the provided buffer.
+	 * In the case of incomplete data (half-packet), the buffer's read position is reset to allow for
+	 * reparsing upon receiving more data.
+	 *
+	 * @param buffer the buffer containing the serialized RESP message
+	 * @return the decoded {@code Resp} object, or {@code null} if the buffer contains incomplete data
+	 */
+	static Resp tryDecode(ByteBuf buffer) {
+		// 记录当前读取位置，半包时必须回到这里重新解析。
+		buffer.markReaderIndex();
+
+		try {
+			Resp resp = decode(buffer);
+			return resp;
+		} catch (RespIncompleteException e) {
+			// 只回滚“数据未收全”的情况；
+			buffer.resetReaderIndex();
+			return null;
+		}
+	}
+
 
 	static Resp decode(ByteBuf buffer) {
 		if (buffer.readableBytes() <= 0) {
-			throw new IllegalStateException("没有可读取的数据");
+			throw new RespIncompleteException();
 		}
-		char tyte = (char) buffer.readByte();
+		char type = (char) buffer.readByte();
 
-		if (tyte == RespType.STATUS.getCode()) {
+		if (type == RespType.STATUS.getCode()) {
 			return new SimpleString(getString(buffer));
-		} else if (tyte == RespType.ERROR.getCode()) {
+		} else if (type == RespType.ERROR.getCode()) {
 			return new Errors(getString(buffer));
-		} else if (tyte == RespType.INTEGER.getCode()) {
+		} else if (type == RespType.INTEGER.getCode()) {
 			return new RespInt(getNumber(buffer));
-		} else if (tyte == RespType.BULK_STRING.getCode()) {
+		} else if (type == RespType.BULK_STRING.getCode()) {
 			int length = getNumber(buffer);
 			if (length == -1) {
 				return BulkString.NIL;
@@ -95,8 +117,9 @@ public interface Resp {
 			if (length < 0) {
 				throw new IllegalStateException("BulkString长度非法");
 			}
+			// Bulk String 的内容后还必须有 \r\n；当前字节不足说明 TCP 半包尚未收全。
 			if (buffer.readableBytes() < length + 2) {
-				throw new IllegalStateException("没有读取到完整的命令");
+				throw new RespIncompleteException();
 			}
 
 			byte[] bytes = new byte[length];
@@ -106,7 +129,7 @@ public interface Resp {
 				throw new IllegalStateException("没有读取到完整的命令");
 			}
 			return new BulkString(new BytesWrapper(bytes));
-		} else if (tyte == RespType.ARRAY.getCode()) {
+		} else if (type == RespType.ARRAY.getCode()) {
 			int length = getNumber(buffer);
 
 			if (length == -1) {
@@ -121,58 +144,78 @@ public interface Resp {
 			}
 			return new RespArray(array);
 		} else {
-			throw new IllegalStateException("未知RESP类型: " + tyte);
+			throw new IllegalStateException("未知RESP类型: " + type);
 		}
 	}
 
 	static String getString(ByteBuf buffer) {
 		StringBuilder builder = new StringBuilder();
-		byte b;
+		byte current;
 		while (buffer.readableBytes() > 0) {
-			b = buffer.readByte();
-			if (b == RespType.R.getCode()) {
+			current = buffer.readByte();
+			// 读取到 CR，下一字节必须是 LF
+			if (current == RespType.R.getCode()) {
 				break;
 			}
-			builder.append((char) b);
+			builder.append((char) current);
 		}
-		if (buffer.readableBytes() == 0 || buffer.readByte() != RespType.N.getCode()) {
-			throw new IllegalStateException("没有读取到完整的命令");
+		// 当前没有足够字节确认 CRLF，属于 TCP 半包
+		if (buffer.readableBytes() == 0) {
+			throw new RespIncompleteException();
+		}
+		// 已经收到了 CR 后的字节，但它不是 LF，才属于非法 RESP
+		if (buffer.readByte() != RespType.N.getCode()) {
+			throw new IllegalStateException("RESP字符串结尾必须是CRLF");
 		}
 		return builder.toString();
 	}
 
 	static int getNumber(ByteBuf buffer) {
 		if (buffer.readableBytes() <= 0) {
-			throw new IllegalStateException("没有可读取的数据");
+			// 数字的首字节都没有收到，属于 TCP 半包
+			throw new RespIncompleteException();
 		}
-		int num = 0;
-		byte b;
+		int value = 0;
+		byte current;
 		boolean positive = true;
+		boolean hasDigit = false;
 		if (buffer.readableBytes() > 0) {
-			b = buffer.readByte();
-			if (b == RespType.NEGATIVE.getCode()) {
+			current = buffer.readByte();
+			if (current == RespType.NEGATIVE.getCode()) {
 				positive = false;
-			} else if (b >= RespType.ZERO.getCode() && b <= RespType.NINE.getCode()) {
-				num = b - RespType.ZERO.getCode();
+			} else if (current >= RespType.ZERO.getCode() && current <= RespType.NINE.getCode()) {
+				value = current - RespType.ZERO.getCode();
+				hasDigit = true;
 			} else {
 				throw new IllegalStateException("数字格式非法");
 			}
 		}
 
 		while (buffer.readableBytes() > 0) {
-			b = buffer.readByte();
-			if (b == RespType.R.getCode()) {
-				break;
+			current = buffer.readByte();
+			if (current == RespType.R.getCode()) {
+				if (buffer.readableBytes() == 0) {
+					// 只读到 CR、尚未读到 LF，说明 CRLF 被拆包。
+					throw new RespIncompleteException();
+				}
+				// CR 后的字节不是 LF，协议格式错误。
+				if (buffer.readByte() != RespType.N.getCode()) {
+					throw new IllegalStateException("RESP数字结尾必须是CRLF");
+				}
+				// 只有负号而没有数字，例如 "-\r\n"，属于非法数字。
+				if (!hasDigit) {
+					throw new IllegalStateException("数字格式非法");
+				}
+				return positive ? value : -value;
 			}
-			if (b >= RespType.ZERO.getCode() && b <= RespType.NINE.getCode()) {
-				num = num * 10 + (b - RespType.ZERO.getCode());
-			} else {
+			// 数字中间出现非数字且不是 CR，属于非法协议。
+			if (current < RespType.ZERO.getCode() || current > RespType.NINE.getCode()) {
 				throw new IllegalStateException("数字格式非法");
 			}
+			value = value * 10 + (current - RespType.ZERO.getCode());
+			hasDigit = true;
 		}
-		if (buffer.readableBytes() == 0 || buffer.readByte() != RespType.N.getCode()) {
-			throw new IllegalStateException("没有读取到完整的命令");
-		}
-		return positive ? num : -num;
+		// 数字已经读取，但尚未收到 CRLF，属于 TCP 半包。
+		throw new RespIncompleteException();
 	}
 }
