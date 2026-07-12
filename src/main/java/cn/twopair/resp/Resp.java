@@ -14,6 +14,16 @@ import static cn.twopair.datatype.BytesWrapper.CHARSET;
 public interface Resp {
 	//todo 先建 RESP 类型体系，暂不支持中文
 
+	/**
+	 * Encodes a given RESP (REdis Serialization Protocol) object into the provided ByteBuf buffer.
+	 * This method serializes RESP types, including SimpleString, Errors, RespInt, BulkString, and RespArray,
+	 * into their respective byte representations following the RESP protocol.
+	 *
+	 * @param resp   the RESP object to encode; supported types include SimpleString, Errors, RespInt, BulkString,
+	 *               and RespArray
+	 * @param buffer the ByteBuf into which the RESP object will be serialized
+	 * @throws IllegalStateException if the provided RESP object type is unsupported
+	 */
 	static void encode(Resp resp, ByteBuf buffer) {
 		if (resp instanceof SimpleString) {
 			buffer.writeByte(RespType.STATUS.getCode());
