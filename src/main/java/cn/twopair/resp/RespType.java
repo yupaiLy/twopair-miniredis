@@ -1,11 +1,14 @@
 package cn.twopair.resp;
 
+import lombok.Getter;
+
 /**
  * @author ljj
  * @description RESP协议类型枚举
  * @date 2026/4/10
  * @twopair
  */
+@Getter
 public enum RespType {
 	// 简单字符串类型
 	STATUS('+'),
