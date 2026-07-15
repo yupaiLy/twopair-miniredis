@@ -3,6 +3,7 @@ package cn.twopair.command;
 import cn.twopair.command.impl.Ping;
 import cn.twopair.command.impl.string.Get;
 import cn.twopair.command.impl.string.Set;
+import cn.twopair.datatype.BytesWrapper;
 import cn.twopair.resp.BulkString;
 import cn.twopair.resp.Resp;
 import cn.twopair.resp.RespArray;
@@ -47,21 +48,21 @@ public class CommandFactory {
 	private CommandFactory() {
 	}
 
+	/**
+	 * @author ljj
+	 * @description 根据 RESP 数组创建本次请求对应的 Redis 命令对象。
+	 * @date 2026/7/14
+	 * @twopair
+	 */
 	public static Command from(RespArray respArray) {
-		if (respArray == null || respArray.getArray().length == 0) {
+		if (respArray == null
+				|| respArray.getArray() == null
+				|| respArray.getArray().length == 0) {
 			throw new IllegalArgumentException("命令数组不能为空");
 		}
 
 		Resp[] array = respArray.getArray();
-		if (!(array[0] instanceof BulkString)) {
-			throw new IllegalArgumentException("命令名必须是BulkString");
-		}
-
-		String commandName = ((BulkString) array[0])
-				.getBytesWrapper()
-				.toUtf8String()
-				.toUpperCase(Locale.ROOT);
-
+		String commandName = validateAndGetCommandName(array);
 		Supplier<Command> commandSupplier = COMMAND_MAP.get(commandName);
 		if (commandSupplier == null) {
 			throw new IllegalArgumentException("不支持的命令: " + commandName);
@@ -73,5 +74,39 @@ public class CommandFactory {
 		// 将本次 RESP 请求内容设置到命令对象中，由具体命令在执行时解析参数。
 		command.setContent(array);
 		return command;
+	}
+
+	/**
+	 * Validates the first element of the provided RESP array as a command name and returns the
+	 * command name in uppercase UTF-8 format.
+	 *
+	 * @param array the array of RESP objects to validate, where the first element is expected
+	 *              to be a BulkString containing the command name.
+	 * @return the validated command name in uppercase UTF-8 format.
+	 * @throws IllegalArgumentException if the first element of the array is not a BulkString,
+	 *                                  or if the command name is null, empty, or invalid.
+	 */
+	private static String validateAndGetCommandName(Resp[] array) {
+		if (!(array[0] instanceof BulkString commandNameBulkString)) {
+			throw new IllegalArgumentException("命令名必须是BulkString");
+		}
+
+		BytesWrapper commandNameBytes = commandNameBulkString.getBytesWrapper();
+
+		/*
+		 * 同时防御三种无效命令名：
+		 * 1. BulkString.NIL；
+		 * 2. 人工构造的 BytesWrapper(null)；
+		 * 3. RESP 中长度为 0 的 BulkString。
+		 */
+		if (commandNameBytes == null
+				|| commandNameBytes.getByteArray() == null
+				|| commandNameBytes.getByteArray().length == 0) {
+			throw new IllegalArgumentException("命令名不能为空");
+		}
+
+		return commandNameBytes
+				.toUtf8String()
+				.toUpperCase(Locale.ROOT);
 	}
 }
