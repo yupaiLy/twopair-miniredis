@@ -22,7 +22,7 @@ public class RedisCoreImplTest {
 		BytesWrapper key = new BytesWrapper("name".getBytes());
 		RedisString value = new RedisString();
 		value.setValue(new BytesWrapper("twopair".getBytes()));
-		value.setTimeout(System.currentTimeMillis() + 3000);
+		value.setTimeout(System.currentTimeMillis() + 500);
 
 		core.put(key, value);
 
@@ -31,8 +31,8 @@ public class RedisCoreImplTest {
 		System.out.println(core.exist(key));
 		RedisString str = (RedisString) data;
 		System.out.println(str.getValue().toUtf8String());
-		// 延迟 4秒
-		Thread.sleep(4000);
+		// 延迟 1秒
+		Thread.sleep(1000);
 		System.out.println(core.exist(key));
 		data = core.get(key);
 		Assert.assertNull(data);

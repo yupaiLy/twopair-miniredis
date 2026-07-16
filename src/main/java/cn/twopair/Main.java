@@ -1,21 +1,32 @@
 package cn.twopair;
 
+import cn.twopair.server.RedisServer;
+
 /**
  * @author ljj
- * @date 2026/4/9
+ * @description MiniRedis 应用启动入口。
+ * @date 2026/7/16
  * @twopair
- *///TIP To <b>Run</b> code, press <shortcut actionId="Run"/> or
-// click the <icon src="AllIcons.Actions.Execute"/> icon in the gutter.
+ */
 public class Main {
-	public static void main(String[] args) {
-		//TIP Press <shortcut actionId="ShowIntentionActions"/> with your caret at the highlighted text
-		// to see how IntelliJ IDEA suggests fixing it.
-		System.out.printf("Hello and welcome!");
 
-		for (int i = 1; i <= 5; i++) {
-			//TIP Press <shortcut actionId="Debug"/> to start debugging your code. We have set one <icon src="AllIcons.Debugger.Db_set_breakpoint"/> breakpoint
-			// for you, but you can always add more by pressing <shortcut actionId="ToggleLineBreakpoint"/>.
-			System.out.println("i = " + i);
+	public static void main(String[] args) {
+		RedisServer server = new RedisServer();
+
+		// JVM 退出或按下 Ctrl+C 时释放端口和 Netty 线程。
+		Runtime.getRuntime().addShutdownHook(
+				new Thread(server::stop, "mini-redis-shutdown")
+		);
+
+		try {
+			server.start();
+			System.out.println("MiniRedis started at port " + server.getPort());
+
+			// 防止 Main 提前结束，持续等待服务关闭。
+			server.blockUntilShutdown();
+		} finally {
+			// 启动或等待过程异常时，同样保证资源释放。
+			server.stop();
 		}
 	}
 }
