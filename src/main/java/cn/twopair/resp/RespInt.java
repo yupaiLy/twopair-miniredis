@@ -12,5 +12,6 @@ import lombok.Getter;
 @Getter
 @AllArgsConstructor
 public class RespInt implements Resp {
-	private final int value;
+	// RESP 整数是有符号 64 位整数，使用 long。
+	private final long value;
 }

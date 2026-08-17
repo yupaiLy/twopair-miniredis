@@ -9,5 +9,8 @@ package cn.twopair.command;
 public enum CommandType {
 	PING,
 	SET,
-	GET
+	SETEX,
+	GET,
+	EXPIRE,
+	TTL,
 }

@@ -16,6 +16,7 @@ import org.junit.Assert;
 import org.junit.Test;
 
 import java.nio.charset.StandardCharsets;
+import java.util.concurrent.atomic.AtomicLong;
 
 
 /**
@@ -435,6 +436,161 @@ public class CommandHandlerTest {
 		} finally {
 			// readOutbound 后，ByteBuf 的释放责任属于测试代码。
 			responseBuffer.release();
+		}
+	}
+	/**
+	 * @author ljj
+	 * @description 测试SET、EXPIRE、GET经过CommandHandler后的完整执行链路。
+	 * @date 2026/7/16
+	 * @twopair
+	 */
+	@Test
+	public void testHandleExpire() {
+		AtomicLong currentTime = new AtomicLong(1000L);
+		RedisCore redisCore = new RedisCoreImpl(currentTime::get);
+
+		EmbeddedChannel channel = new EmbeddedChannel(
+				new RespEncoder(),
+				new CommandHandler(redisCore)
+		);
+
+		BytesWrapper key = new BytesWrapper(
+				"name".getBytes(StandardCharsets.UTF_8)
+		);
+
+		try {
+			// 先写入一个永久存在的字符串。
+			channel.writeInbound(command("SET", "name", "twopair"));
+			Assert.assertEquals(
+					"+OK\r\n",
+					readOutboundAsString(channel)
+			);
+
+			// 为存在的key设置10秒过期时间，应返回RESP整数1。
+			channel.writeInbound(command("EXPIRE", "name", "10"));
+			Assert.assertEquals(
+					":1\r\n",
+					readOutboundAsString(channel)
+			);
+			Assert.assertEquals(10L, redisCore.ttl(key));
+
+			// 到达过期时间后，GET应返回Null BulkString。
+			currentTime.set(11000L);
+			channel.writeInbound(command("GET", "name"));
+			Assert.assertEquals(
+					"$-1\r\n",
+					readOutboundAsString(channel)
+			);
+
+			// 不存在的key设置过期时间，应返回RESP整数0。
+			channel.writeInbound(command("EXPIRE", "missing", "10"));
+			Assert.assertEquals(
+					":0\r\n",
+					readOutboundAsString(channel)
+			);
+
+			// 非法seconds应转换成RESP错误，不能关闭连接。
+			channel.writeInbound(command("EXPIRE", "name", "abc"));
+			Assert.assertEquals(
+					"-ERR EXPIRE的seconds必须是整数\r\n",
+					readOutboundAsString(channel)
+			);
+			Assert.assertTrue(channel.isOpen());
+		} finally {
+			channel.finishAndReleaseAll();
+		}
+	}
+	/**
+	 * @author ljj
+	 * @description 测试TTL经过CommandHandler后的完整响应。
+	 * @date 2026/7/16
+	 * @twopair
+	 */
+	@Test
+	public void testHandleTtl() {
+		AtomicLong currentTime = new AtomicLong(1000L);
+		RedisCore redisCore = new RedisCoreImpl(currentTime::get);
+
+		EmbeddedChannel channel = new EmbeddedChannel(
+				new RespEncoder(),
+				new CommandHandler(redisCore)
+		);
+
+		try {
+			// 不存在的key返回-2。
+			channel.writeInbound(command("TTL", "missing"));
+			Assert.assertEquals(":-2\r\n", readOutboundAsString(channel));
+
+			// SET创建的key默认永久存在，因此TTL返回-1。
+			channel.writeInbound(command("SET", "name", "twopair"));
+			Assert.assertEquals("+OK\r\n", readOutboundAsString(channel));
+
+			channel.writeInbound(command("TTL", "name"));
+			Assert.assertEquals(":-1\r\n", readOutboundAsString(channel));
+
+			// 设置10秒过期时间。
+			channel.writeInbound(command("EXPIRE", "name", "10"));
+			Assert.assertEquals(":1\r\n", readOutboundAsString(channel));
+
+			channel.writeInbound(command("TTL", "name"));
+			Assert.assertEquals(":10\r\n", readOutboundAsString(channel));
+
+			// 经过1秒后剩余9秒。
+			currentTime.set(2000L);
+			channel.writeInbound(command("TTL", "name"));
+			Assert.assertEquals(":9\r\n", readOutboundAsString(channel));
+
+			// 到达过期时间后返回-2。
+			currentTime.set(11000L);
+			channel.writeInbound(command("TTL", "name"));
+			Assert.assertEquals(":-2\r\n", readOutboundAsString(channel));
+
+			// 缺少key时返回RESP错误，但不关闭连接。
+			channel.writeInbound(command("TTL"));
+			Assert.assertEquals(
+					"-ERR TTL命令需要key一个参数\r\n",
+					readOutboundAsString(channel)
+			);
+			Assert.assertTrue(channel.isOpen());
+		} finally {
+			channel.finishAndReleaseAll();
+		}
+	}
+
+	/**
+	 * 验证SETEX经过命令处理器后能够写入数据、设置TTL并按时过期。
+	 */
+	@Test
+	public void testHandleSetEx() {
+		AtomicLong currentTime = new AtomicLong(1000L);
+		RedisCore redisCore = new RedisCoreImpl(currentTime::get);
+		EmbeddedChannel channel = new EmbeddedChannel(
+				new RespEncoder(),
+				new CommandHandler(redisCore)
+		);
+
+		try {
+			channel.writeInbound(command("SETEX", "name", "10", "twopair"));
+			Assert.assertEquals("+OK\r\n", readOutboundAsString(channel));
+
+			channel.writeInbound(command("TTL", "name"));
+			Assert.assertEquals(":10\r\n", readOutboundAsString(channel));
+
+			channel.writeInbound(command("GET", "name"));
+			Assert.assertEquals("$7\r\ntwopair\r\n", readOutboundAsString(channel));
+
+			currentTime.set(11000L);
+			channel.writeInbound(command("GET", "name"));
+			Assert.assertEquals("$-1\r\n", readOutboundAsString(channel));
+
+			channel.writeInbound(command("SETEX", "name", "abc", "value"));
+			Assert.assertEquals(
+					"-ERR SETEX的seconds必须是整数\r\n",
+					readOutboundAsString(channel)
+			);
+			Assert.assertTrue(channel.isOpen());
+		} finally {
+			channel.finishAndReleaseAll();
 		}
 	}
 }

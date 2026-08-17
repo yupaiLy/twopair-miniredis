@@ -1,5 +1,6 @@
 package cn.twopair.server;
 
+import cn.twopair.core.impl.RedisCoreImpl;
 import org.junit.Assert;
 import org.junit.Test;
 
@@ -11,6 +12,8 @@ import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * @author ljj
@@ -196,5 +199,43 @@ public class RedisServerTest {
 				waitingThread.join(1000);
 			}
 		}
+	}
+
+	/**
+	 * 验证主动过期清理由独立守护线程执行，并在服务关闭后停止调度。
+	 */
+	@Test
+	public void testScheduleExpirationCleanup() throws InterruptedException {
+		CountDownLatch cleanupExecuted = new CountDownLatch(1);
+		AtomicInteger cleanupCount = new AtomicInteger();
+		AtomicReference<Thread> cleanupThread = new AtomicReference<>();
+		RedisCoreImpl redisCore = new RedisCoreImpl() {
+			@Override
+			public int removeExpired() {
+				cleanupThread.compareAndSet(null, Thread.currentThread());
+				cleanupCount.incrementAndGet();
+				cleanupExecuted.countDown();
+				return super.removeExpired();
+			}
+		};
+		RedisServer server = new RedisServer(0, redisCore, 10L);
+
+		try {
+			server.start();
+			Assert.assertTrue(cleanupExecuted.await(1, TimeUnit.SECONDS));
+		} finally {
+			server.stop();
+		}
+
+		Thread executingThread = cleanupThread.get();
+		Assert.assertNotNull(executingThread);
+		Assert.assertTrue(
+				executingThread.getName().startsWith("redis-expiration-cleaner")
+		);
+		Assert.assertTrue(executingThread.isDaemon());
+
+		int countAfterStop = cleanupCount.get();
+		Thread.sleep(50L);
+		Assert.assertEquals(countAfterStop, cleanupCount.get());
 	}
 }

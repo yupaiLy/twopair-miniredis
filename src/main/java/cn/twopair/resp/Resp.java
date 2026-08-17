@@ -39,7 +39,7 @@ public interface Resp {
 			buffer.writeByte(RespType.N.getCode());
 		} else if (resp instanceof RespInt) {
 			buffer.writeByte(RespType.INTEGER.getCode());
-			int value = ((RespInt) resp).getValue();
+			long value = ((RespInt) resp).getValue();
 			buffer.writeBytes(String.valueOf(value).getBytes(CHARSET));
 			buffer.writeByte(RespType.R.getCode());
 			buffer.writeByte(RespType.N.getCode());
@@ -120,15 +120,12 @@ public interface Resp {
 		} else if (type == RespType.INTEGER.getCode()) {
 			return new RespInt(getNumber(buffer));
 		} else if (type == RespType.BULK_STRING.getCode()) {
-			int length = getNumber(buffer);
+			int length = getLength(buffer, RespType.BULK_STRING.name());
 			if (length == -1) {
 				return BulkString.NIL;
 			}
-			if (length < 0) {
-				throw new IllegalStateException("BulkString长度非法");
-			}
 			// Bulk String 的内容后还必须有 \r\n；当前字节不足说明 TCP 半包尚未收全。
-			if (buffer.readableBytes() < length + 2) {
+			if ((long) buffer.readableBytes() < (long)length + 2L) {
 				throw new RespIncompleteException();
 			}
 
@@ -140,13 +137,10 @@ public interface Resp {
 			}
 			return new BulkString(new BytesWrapper(bytes));
 		} else if (type == RespType.ARRAY.getCode()) {
-			int length = getNumber(buffer);
+			int length = getLength(buffer, RespType.ARRAY.name());
 
 			if (length == -1) {
 				return RespArray.NIL;
-			}
-			if (length < 0) {
-				throw new IllegalStateException("Array长度非法");
 			}
 			Resp[] array = new Resp[length];
 			for (int i = 0; i < length; i++) {
@@ -179,53 +173,45 @@ public interface Resp {
 		}
 		return builder.toString();
 	}
+	/**
+	 * @author ljj
+	 * @description 读取 RESP 数字并转换为有符号 64 位整数。
+	 * @date 2026/7/16
+	 * @twopair
+	 */
+	static long getNumber(ByteBuf buffer) {
+		// getString 已经负责处理 CRLF 和 TCP 半包。
+		String number = getString(buffer);
 
-	static int getNumber(ByteBuf buffer) {
-		if (buffer.readableBytes() <= 0) {
-			// 数字的首字节都没有收到，属于 TCP 半包
-			throw new RespIncompleteException();
+		try {
+			// 标准库负责负号、非法字符和 long 溢出检测。
+			return Long.parseLong(number);
+		} catch (NumberFormatException e) {
+			throw new IllegalStateException(
+					"RESP数字格式非法: " + number,
+					e
+			);
 		}
-		int value = 0;
-		byte current;
-		boolean positive = true;
-		boolean hasDigit = false;
-		if (buffer.readableBytes() > 0) {
-			current = buffer.readByte();
-			if (current == RespType.NEGATIVE.getCode()) {
-				positive = false;
-			} else if (current >= RespType.ZERO.getCode() && current <= RespType.NINE.getCode()) {
-				value = current - RespType.ZERO.getCode();
-				hasDigit = true;
-			} else {
-				throw new IllegalStateException("数字格式非法");
-			}
+	}
+	/**
+	 * @author ljj
+	 * @description 将 RESP 长度转换为 Java 可用的 int 长度。
+	 * @date 2026/7/16
+	 * @twopair
+	 */
+	private static int getLength(ByteBuf buffer, String typeName) {
+		long length = getNumber(buffer);
+
+		/*
+		 * -1 表示 Null BulkString 或 Null Array。
+		 * Java 数组和 ByteBuf 的索引使用 int，因此长度不能超过 Integer.MAX_VALUE。
+		 */
+		if (length < -1 || length > Integer.MAX_VALUE) {
+			throw new IllegalStateException(
+					typeName + "长度非法: " + length
+			);
 		}
 
-		while (buffer.readableBytes() > 0) {
-			current = buffer.readByte();
-			if (current == RespType.R.getCode()) {
-				if (buffer.readableBytes() == 0) {
-					// 只读到 CR、尚未读到 LF，说明 CRLF 被拆包。
-					throw new RespIncompleteException();
-				}
-				// CR 后的字节不是 LF，协议格式错误。
-				if (buffer.readByte() != RespType.N.getCode()) {
-					throw new IllegalStateException("RESP数字结尾必须是CRLF");
-				}
-				// 只有负号而没有数字，例如 "-\r\n"，属于非法数字。
-				if (!hasDigit) {
-					throw new IllegalStateException("数字格式非法");
-				}
-				return positive ? value : -value;
-			}
-			// 数字中间出现非数字且不是 CR，属于非法协议。
-			if (current < RespType.ZERO.getCode() || current > RespType.NINE.getCode()) {
-				throw new IllegalStateException("数字格式非法");
-			}
-			value = value * 10 + (current - RespType.ZERO.getCode());
-			hasDigit = true;
-		}
-		// 数字已经读取，但尚未收到 CRLF，属于 TCP 半包。
-		throw new RespIncompleteException();
+		return (int) length;
 	}
 }

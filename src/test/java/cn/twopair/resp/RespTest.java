@@ -45,7 +45,7 @@ public class RespTest {
 	@Test
 	public void testGetNumber() {
 		ByteBuf buffer = Unpooled.copiedBuffer("666\r\n", StandardCharsets.UTF_8);
-		int result = Resp.getNumber(buffer);
+		long result = Resp.getNumber(buffer);
 		Assert.assertEquals(666, result);
 		buffer = Unpooled.copiedBuffer("-123\r\n", StandardCharsets.UTF_8);
 		result = Resp.getNumber(buffer);
@@ -286,6 +286,70 @@ public class RespTest {
 		} catch (IllegalStateException e) {
 			// 能进入这里，说明 tryDecode 没有吞掉真正的协议错误。
 			Assert.assertNotNull(e);
+		}
+	}
+	/**
+	 * @author ljj
+	 * @description 测试 RESP 整数支持有符号 64 位数值。
+	 * @date 2026/7/16
+	 * @twopair
+	 */
+	@Test
+	public void testRespIntSupportsLong() {
+		ByteBuf buffer = Unpooled.buffer();
+
+		try {
+			// 测试 Long 最大值解码。
+			buffer.writeCharSequence(
+					":" + Long.MAX_VALUE + "\r\n",
+					StandardCharsets.UTF_8
+			);
+			RespInt maxValue = (RespInt) Resp.decode(buffer);
+			Assert.assertEquals(Long.MAX_VALUE, maxValue.getValue());
+
+			// 清空缓冲区，继续测试 Long 最小值。
+			buffer.clear();
+			buffer.writeCharSequence(
+					":" + Long.MIN_VALUE + "\r\n",
+					StandardCharsets.UTF_8
+			);
+			RespInt minValue = (RespInt) Resp.decode(buffer);
+			Assert.assertEquals(Long.MIN_VALUE, minValue.getValue());
+
+			// 验证编码后仍然保持完整的 64 位数值。
+			buffer.clear();
+			Resp.encode(maxValue, buffer);
+			Assert.assertEquals(
+					":" + Long.MAX_VALUE + "\r\n",
+					buffer.toString(StandardCharsets.UTF_8)
+			);
+		} finally {
+			buffer.release();
+		}
+	}
+	/**
+	 * @author ljj
+	 * @description 测试最大 int 长度不会因 length 加 2 溢出而申请超大数组。
+	 * @date 2026/7/16
+	 * @twopair
+	 */
+	@Test
+	public void testMaximumBulkStringLengthDoesNotOverflow() {
+		ByteBuf buffer = Unpooled.copiedBuffer(
+				"$" + Integer.MAX_VALUE + "\r\n",
+				StandardCharsets.UTF_8
+		);
+
+		try {
+			int initialReaderIndex = buffer.readerIndex();
+
+			// 当前只有长度头，没有字符串内容，因此应该被识别为半包。
+			Resp resp = Resp.tryDecode(buffer);
+
+			Assert.assertNull(resp);
+			Assert.assertEquals(initialReaderIndex, buffer.readerIndex());
+		} finally {
+			buffer.release();
 		}
 	}
 }

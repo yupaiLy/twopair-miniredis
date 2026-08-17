@@ -1,8 +1,11 @@
 package cn.twopair.command;
 
+import cn.twopair.command.impl.Expire;
 import cn.twopair.command.impl.Ping;
+import cn.twopair.command.impl.Ttl;
 import cn.twopair.command.impl.string.Get;
 import cn.twopair.command.impl.string.Set;
+import cn.twopair.command.impl.string.SetEx;
 import cn.twopair.datatype.BytesWrapper;
 import cn.twopair.resp.BulkString;
 import cn.twopair.resp.Resp;
@@ -42,7 +45,10 @@ public class CommandFactory {
 		// Ping::new 等价于 () -> new Ping()，表示每次调用都会创建新的 Ping 对象。
 		COMMAND_MAP.put("PING", Ping::new);
 		COMMAND_MAP.put("SET", Set::new);
+		COMMAND_MAP.put("SETEX", SetEx::new);
 		COMMAND_MAP.put("GET", Get::new);
+		COMMAND_MAP.put("EXPIRE", Expire::new);
+		COMMAND_MAP.put("TTL", Ttl::new);
 	}
 
 	private CommandFactory() {

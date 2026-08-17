@@ -16,6 +16,10 @@ import io.netty.channel.socket.nio.NioServerSocketChannel;
 import io.netty.util.concurrent.Future;
 
 import java.net.InetSocketAddress;
+import java.util.Objects;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -27,6 +31,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  */
 public class RedisServer implements AutoCloseable {
 	public static final int DEFAULT_PORT = 6378;
+	private static final long DEFAULT_CLEANUP_INTERVAL_MILLIS = 1000L;
 
 	private final int port;
 	// 所有客户端连接必须共享同一个 Redis 数据存储。
@@ -41,13 +46,71 @@ public class RedisServer implements AutoCloseable {
 	private Channel serverChannel;
 
 
+	private final long cleanupIntervalMillis;
+
+	/**
+	 * 专门执行过期清理，避免耗时扫描阻塞Netty EventLoop。
+	 */
+	private final ScheduledExecutorService expirationExecutor;
+
+	private ScheduledFuture<?> expirationCleanupTask;
+
+
+	/**
+	 * 使用默认端口和默认清理间隔创建Redis服务。
+	 */
 	public RedisServer() {
 		this(DEFAULT_PORT);
 	}
 
+	/**
+	 * 使用指定端口创建Redis服务。
+	 *
+	 * @param port 服务监听端口，传入0时由操作系统分配端口
+	 */
 	public RedisServer(int port) {
+		this(
+				port,
+				new RedisCoreImpl(),
+				DEFAULT_CLEANUP_INTERVAL_MILLIS
+		);
+	}
+
+	/**
+	 * 使用指定核心存储和清理间隔创建Redis服务。
+	 *
+	 * @param port                  服务监听端口
+	 * @param redisCore             Redis核心存储
+	 * @param cleanupIntervalMillis 主动清理间隔，单位为毫秒
+	 * @throws IllegalArgumentException 当清理间隔小于等于0时抛出
+	 */
+	RedisServer(
+			int port,
+			RedisCore redisCore,
+			long cleanupIntervalMillis
+	) {
+		if (cleanupIntervalMillis <= 0L) {
+			throw new IllegalArgumentException("主动清理间隔必须大于0");
+		}
+
 		this.port = port;
-		this.redisCore = new RedisCoreImpl();
+		this.redisCore = Objects.requireNonNull(
+				redisCore,
+				"RedisCore不能为空"
+		);
+		this.cleanupIntervalMillis = cleanupIntervalMillis;
+
+		this.expirationExecutor =
+				Executors.newSingleThreadScheduledExecutor(runnable -> {
+					Thread thread = new Thread(
+							runnable,
+							"redis-expiration-cleaner"
+					);
+
+					// 守护线程不会阻止JVM正常退出。
+					thread.setDaemon(true);
+					return thread;
+				});
 	}
 
 	public int getPort() {
@@ -88,6 +151,16 @@ public class RedisServer implements AutoCloseable {
 
 			// bind() 异步绑定；sync() 等待绑定完成后再返回。
 			serverChannel = bootstrap.bind(port).sync().channel();
+			/*
+			 * 使用固定延迟：本次清理结束后，再等待指定时间执行下一次。
+			 * 避免清理速度跟不上时产生任务堆积。
+			 */
+			expirationCleanupTask = expirationExecutor.scheduleWithFixedDelay(
+					redisCore::removeExpired,
+					cleanupIntervalMillis,
+					cleanupIntervalMillis,
+					TimeUnit.MILLISECONDS
+			);
 		} catch (InterruptedException e) {
 			Thread.currentThread().interrupt();
 			stop();
@@ -123,6 +196,13 @@ public class RedisServer implements AutoCloseable {
 		if (!closed.compareAndSet(false, true)) {
 			return;
 		}
+
+		if (expirationCleanupTask != null) {
+			// 不强制中断当前清理，但禁止后续调度。
+			expirationCleanupTask.cancel(false);
+		}
+		// 释放RedisServer自己创建的后台线程。
+		expirationExecutor.shutdownNow();
 
 		if (serverChannel != null) {
 			serverChannel.close().syncUninterruptibly();
