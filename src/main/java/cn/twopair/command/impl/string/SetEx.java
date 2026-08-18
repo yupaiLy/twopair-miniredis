@@ -1,13 +1,18 @@
 package cn.twopair.command.impl.string;
 
-import cn.twopair.command.Command;
 import cn.twopair.command.CommandType;
+import cn.twopair.command.WriteCommand;
 import cn.twopair.core.RedisCore;
 import cn.twopair.datatype.BytesWrapper;
+import cn.twopair.datatype.RedisData;
 import cn.twopair.datatype.RedisString;
 import cn.twopair.resp.BulkString;
 import cn.twopair.resp.Resp;
+import cn.twopair.resp.RespArray;
 import cn.twopair.resp.SimpleString;
+
+import java.nio.charset.StandardCharsets;
+import java.util.List;
 
 /**
  * @author ljj
@@ -15,7 +20,7 @@ import cn.twopair.resp.SimpleString;
  * @date 2026/8/11
  * @twopair
  */
-public class SetEx implements Command {
+public class SetEx implements WriteCommand {
 
 	private BytesWrapper key;
 	private BytesWrapper value;
@@ -96,5 +101,47 @@ public class SetEx implements Command {
 		redisCore.putWithExpiration(key, redisString, seconds);
 
 		return new SimpleString("OK");
+	}
+
+	/**
+	 * 将SETEX转换成SET和绝对时间PEXPIREAT，避免重启后TTL重新计算。
+	 *
+	 * @param originalCommand 原始SETEX命令
+	 * @param redisCore       命令执行后的Redis核心存储
+	 * @return SET和PEXPIREAT命令
+	 */
+	@Override
+	public List<RespArray> toAofCommands(RespArray originalCommand, RedisCore redisCore) {
+		RedisData redisData = redisCore.get(key);
+
+		if (redisData == null || redisData.timeout() == -1L) {
+			return List.of(originalCommand);
+		}
+
+		RespArray setCommand = new RespArray(new Resp[]{
+				bulkString("SET"),
+				new BulkString(key),
+				new BulkString(value)
+		});
+
+		RespArray expireAtCommand = new RespArray(new Resp[]{
+				bulkString("PEXPIREAT"),
+				new BulkString(key),
+				bulkString(String.valueOf(redisData.timeout()))
+		});
+
+		return List.of(setCommand, expireAtCommand);
+	}
+
+	/**
+	 * 将字符串转换成RESP块字符串。
+	 *
+	 * @param content 字符串内容
+	 * @return RESP块字符串
+	 */
+	private BulkString bulkString(String content) {
+		return new BulkString(new BytesWrapper(
+				content.getBytes(StandardCharsets.UTF_8)
+		));
 	}
 }

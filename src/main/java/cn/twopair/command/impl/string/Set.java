@@ -2,6 +2,7 @@ package cn.twopair.command.impl.string;
 
 import cn.twopair.command.Command;
 import cn.twopair.command.CommandType;
+import cn.twopair.command.WriteCommand;
 import cn.twopair.core.RedisCore;
 import cn.twopair.datatype.BytesWrapper;
 import cn.twopair.datatype.RedisString;
@@ -15,7 +16,7 @@ import cn.twopair.resp.SimpleString;
  * @date 2026/7/10
  * @twopair
  */
-public class Set implements Command {
+public class Set implements WriteCommand {
 
 	private BytesWrapper key;
 	private BytesWrapper value;

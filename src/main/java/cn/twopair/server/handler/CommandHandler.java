@@ -2,7 +2,9 @@ package cn.twopair.server.handler;
 
 import cn.twopair.command.Command;
 import cn.twopair.command.CommandFactory;
+import cn.twopair.command.WriteCommand;
 import cn.twopair.core.RedisCore;
+import cn.twopair.persistence.aof.AofFile;
 import cn.twopair.resp.Errors;
 import cn.twopair.resp.Resp;
 import cn.twopair.resp.RespArray;
@@ -10,6 +12,9 @@ import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
+
+import java.io.IOException;
+import java.util.List;
 
 /**
  * @author ljj
@@ -20,18 +25,33 @@ import io.netty.channel.SimpleChannelInboundHandler;
 public class CommandHandler extends SimpleChannelInboundHandler<Resp> {
 
 	/**
+	 * AOF文件；为null表示当前服务未启用AOF。
+	 */
+	private final AofFile aofFile;
+
+	/**
 	 * 所有客户端连接共享的 Redis 核心存储。
 	 */
 	private final RedisCore redisCore;
 
 	/**
-	 * @author ljj
-	 * @description 通过构造器注入共享的 RedisCore。
-	 * @date 2026/7/13
-	 * @twopair
+	 * 创建未启用AOF的命令处理器。
+	 *
+	 * @param redisCore 所有连接共享的Redis核心存储
 	 */
 	public CommandHandler(RedisCore redisCore) {
+		this(redisCore, null);
+	}
+
+	/**
+	 * 创建启用AOF的命令处理器。
+	 *
+	 * @param redisCore 所有连接共享的Redis核心存储
+	 * @param aofFile   用于记录成功写命令的AOF文件
+	 */
+	public CommandHandler(RedisCore redisCore, AofFile aofFile) {
 		this.redisCore = redisCore;
+		this.aofFile = aofFile;
 	}
 
 	/**
@@ -43,23 +63,23 @@ public class CommandHandler extends SimpleChannelInboundHandler<Resp> {
 	@Override
 	protected void channelRead0(ChannelHandlerContext ctx, Resp resp) {
 		// redis-cli 发送的命令必须是 RESP Array。
-		if (!(resp instanceof RespArray)) {
+		if (!(resp instanceof RespArray commandArray)) {
 			writeError(ctx, "命令必须使用RESP Array");
 			return;
 		}
 
 		try {
-			// 根据数组中的命令名称创建 PING、SET 或 GET 对象。
-			Command command = CommandFactory.from((RespArray) resp);
 
-			// 命令通过共享的 RedisCore 执行业务逻辑。
-			Resp response = command.handle(redisCore);
-
-			/*
-			 * 写出 Resp 对象并立即刷新。
-			 * 出站事件会向前经过 RespEncoder，最终变成 ByteBuf。
-			 */
+			// 创建命令时会完成参数解析和基础校验。
+			Command command = CommandFactory.from(commandArray);
+			Resp response = executeCommand(command, commandArray);
 			ctx.writeAndFlush(response);
+		} catch (IOException e) {
+			/*
+			 * 内存命令已经执行，但AOF持久化失败。
+			 * 当前阶段返回错误，后续再完善写入失败后的服务保护策略。
+			 */
+			writeError(ctx, "AOF持久化失败");
 		} catch (IllegalArgumentException e) {
 			/*
 			 * 可预期的输入错误，例如空命令名、未知命令。
@@ -112,6 +132,34 @@ public class CommandHandler extends SimpleChannelInboundHandler<Resp> {
 		 */
 		ChannelFuture future = writeError(ctx, message);
 		future.addListener(ChannelFutureListener.CLOSE);
+	}
+
+	/**
+	 * 执行命令，并保证写命令的内存修改顺序与AOF追加顺序一致。
+	 *
+	 * @param command         已完成参数解析的命令
+	 * @param originalCommand 客户端发送的原始RESP命令
+	 * @return 命令执行结果
+	 * @throws IOException 当AOF写入失败时抛出
+	 */
+	private Resp executeCommand(Command command, RespArray originalCommand) throws IOException {
+		if (aofFile == null || !(command instanceof WriteCommand writeCommand)) {
+			return command.handle(redisCore);
+		}
+
+		/*
+		 * 所有CommandHandler共享同一个AofFile，因此可以把它作为写锁。
+		 * 锁内同时完成内存修改和AOF追加，防止其他连接插入写命令。
+		 */
+		synchronized (aofFile) {
+			Resp response = command.handle(redisCore);
+
+			List<RespArray> aofCommands =
+					writeCommand.toAofCommands(originalCommand, redisCore);
+			aofFile.appendAll(aofCommands);
+
+			return response;
+		}
 	}
 
 	/**

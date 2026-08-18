@@ -7,6 +7,7 @@ import cn.twopair.datatype.RedisData;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.LongSupplier;
 
 /**
@@ -142,6 +143,40 @@ public class RedisCoreImpl implements RedisCore {
 		});
 
 		return result != null;
+	}
+
+	/**
+	 * 为指定key设置绝对毫秒过期时间，过去的时间表示立即删除。
+	 *
+	 * @param key 需要设置过期时间的key
+	 * @param expireAtMillis 绝对毫秒时间戳
+	 * @return key存在并成功处理时返回true
+	 */
+	@Override
+	public boolean expireAt(BytesWrapper key, long expireAtMillis) {
+		AtomicBoolean success = new AtomicBoolean(false);
+
+		map.computeIfPresent(key, (currentKey, redisData) -> {
+			long now = currentTimeMillis.getAsLong();
+			long oldTimeout = redisData.timeout();
+
+			// 已经过期的数据在逻辑上等同于不存在。
+			if (oldTimeout != -1L && oldTimeout <= now) {
+				return null;
+			}
+
+			success.set(true);
+
+			// 目标时间已经到达，直接删除当前key。
+			if (expireAtMillis <= now) {
+				return null;
+			}
+
+			redisData.setTimeout(expireAtMillis);
+			return redisData;
+		});
+
+		return success.get();
 	}
 
 	@Override

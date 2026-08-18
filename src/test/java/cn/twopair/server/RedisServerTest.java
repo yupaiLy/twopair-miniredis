@@ -10,6 +10,8 @@ import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -237,5 +239,73 @@ public class RedisServerTest {
 		int countAfterStop = cleanupCount.get();
 		Thread.sleep(50L);
 		Assert.assertEquals(countAfterStop, cleanupCount.get());
+	}
+
+	/**
+	 * 验证服务器启动时会重放AOF，并将运行期间的新写命令继续追加到同一文件。
+	 *
+	 * @throws Exception 当临时文件、网络连接或AOF处理失败时抛出
+	 */
+	@Test
+	public void testReplayAndAppendAofDuringServerLifecycle() throws Exception {
+		Path path = Files.createTempFile("twopair-miniredis-server-", ".aof");
+		RedisServer server = null;
+
+		try {
+			String historyCommand = "*3\r\n"
+					+ "$3\r\nSET\r\n"
+					+ "$4\r\nname\r\n"
+					+ "$7\r\ntwopair\r\n";
+			Files.writeString(path, historyCommand, StandardCharsets.UTF_8);
+
+			server = new RedisServer(
+					0,
+					new RedisCoreImpl(),
+					10L,
+					path
+			);
+			server.start();
+
+			try (Socket client = new Socket("127.0.0.1", server.getPort())) {
+				client.setSoTimeout(2000);
+				OutputStream output = client.getOutputStream();
+				BufferedReader input = new BufferedReader(
+						new InputStreamReader(
+								client.getInputStream(),
+								StandardCharsets.UTF_8
+						)
+				);
+
+				// 该数据仅存在于启动前准备的AOF中，用于验证启动重放。
+				output.write(("*2\r\n"
+						+ "$3\r\nGET\r\n"
+						+ "$4\r\nname\r\n")
+						.getBytes(StandardCharsets.UTF_8));
+				output.flush();
+				Assert.assertEquals("$7", input.readLine());
+				Assert.assertEquals("twopair", input.readLine());
+
+				// 该命令应在执行成功后追加到已经打开的同一个AOF文件。
+				output.write(("*3\r\n"
+						+ "$3\r\nSET\r\n"
+						+ "$4\r\ncity\r\n"
+						+ "$6\r\n杭州\r\n")
+						.getBytes(StandardCharsets.UTF_8));
+				output.flush();
+				Assert.assertEquals("+OK", input.readLine());
+			}
+
+			server.stop();
+			server = null;
+
+			String aofContent = Files.readString(path, StandardCharsets.UTF_8);
+			Assert.assertTrue(aofContent.contains("twopair"));
+			Assert.assertTrue(aofContent.contains("杭州"));
+		} finally {
+			if (server != null) {
+				server.stop();
+			}
+			Files.deleteIfExists(path);
+		}
 	}
 }

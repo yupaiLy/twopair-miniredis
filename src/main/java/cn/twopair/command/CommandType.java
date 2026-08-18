@@ -12,5 +12,6 @@ public enum CommandType {
 	SETEX,
 	GET,
 	EXPIRE,
+	PEXPIREAT,
 	TTL,
 }

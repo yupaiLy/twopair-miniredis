@@ -2,6 +2,8 @@ package cn.twopair.server;
 
 import cn.twopair.core.RedisCore;
 import cn.twopair.core.impl.RedisCoreImpl;
+import cn.twopair.persistence.aof.AofFile;
+import cn.twopair.persistence.aof.AofReplay;
 import cn.twopair.server.codec.RespDecoder;
 import cn.twopair.server.codec.RespEncoder;
 import cn.twopair.server.handler.CommandHandler;
@@ -15,7 +17,9 @@ import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
 import io.netty.util.concurrent.Future;
 
+import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.nio.file.Path;
 import java.util.Objects;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -55,50 +59,51 @@ public class RedisServer implements AutoCloseable {
 
 	private ScheduledFuture<?> expirationCleanupTask;
 
+	public static final Path DEFAULT_AOF_PATH = Path.of("data", "appendonly.aof");
+	private final Path aofPath;
+	private AofFile aofFile;
 
-	/**
-	 * 使用默认端口和默认清理间隔创建Redis服务。
-	 */
 	public RedisServer() {
-		this(DEFAULT_PORT);
+		this(DEFAULT_PORT, DEFAULT_AOF_PATH);
+	}
+
+	public RedisServer(int port) {
+		this(port, new RedisCoreImpl(), DEFAULT_CLEANUP_INTERVAL_MILLIS, null);
 	}
 
 	/**
-	 * 使用指定端口创建Redis服务。
+	 * 创建启用AOF持久化的Redis服务。
 	 *
-	 * @param port 服务监听端口，传入0时由操作系统分配端口
+	 * @param port    服务监听端口
+	 * @param aofPath AOF文件路径
 	 */
-	public RedisServer(int port) {
+	public RedisServer(int port, Path aofPath) {
 		this(
 				port,
 				new RedisCoreImpl(),
-				DEFAULT_CLEANUP_INTERVAL_MILLIS
+				DEFAULT_CLEANUP_INTERVAL_MILLIS,
+				Objects.requireNonNull(aofPath, "AOF文件路径不能为空")
 		);
 	}
 
-	/**
-	 * 使用指定核心存储和清理间隔创建Redis服务。
-	 *
-	 * @param port                  服务监听端口
-	 * @param redisCore             Redis核心存储
-	 * @param cleanupIntervalMillis 主动清理间隔，单位为毫秒
-	 * @throws IllegalArgumentException 当清理间隔小于等于0时抛出
-	 */
+	RedisServer(int port, RedisCore redisCore, long cleanupIntervalMillis) {
+		this(port, redisCore, cleanupIntervalMillis, null);
+	}
+
 	RedisServer(
 			int port,
 			RedisCore redisCore,
-			long cleanupIntervalMillis
+			long cleanupIntervalMillis,
+			Path aofPath
 	) {
 		if (cleanupIntervalMillis <= 0L) {
 			throw new IllegalArgumentException("主动清理间隔必须大于0");
 		}
 
 		this.port = port;
-		this.redisCore = Objects.requireNonNull(
-				redisCore,
-				"RedisCore不能为空"
-		);
+		this.redisCore = Objects.requireNonNull(redisCore, "RedisCore不能为空");
 		this.cleanupIntervalMillis = cleanupIntervalMillis;
+		this.aofPath = aofPath;
 
 		this.expirationExecutor =
 				Executors.newSingleThreadScheduledExecutor(runnable -> {
@@ -106,13 +111,10 @@ public class RedisServer implements AutoCloseable {
 							runnable,
 							"redis-expiration-cleaner"
 					);
-
-					// 守护线程不会阻止JVM正常退出。
 					thread.setDaemon(true);
 					return thread;
 				});
 	}
-
 	public int getPort() {
 		if (serverChannel == null) {
 			throw new IllegalStateException("Redis服务尚未启动");
@@ -123,6 +125,13 @@ public class RedisServer implements AutoCloseable {
 
 	public void start() {
 		try {
+			if (aofPath != null) {
+				// 必须先恢复历史数据，防止客户端看到只恢复了一部分的数据。
+				AofReplay.replay(aofPath, redisCore);
+
+				// 重放完成后再打开文件，记录服务器运行期间的新写命令。
+				aofFile = new AofFile(aofPath);
+			}
 			// Boss 组使用一个线程，负责接收客户端连接。
 			bossGroup = new MultiThreadIoEventLoopGroup(
 					1,
@@ -145,7 +154,7 @@ public class RedisServer implements AutoCloseable {
 							channel.pipeline()
 									.addLast(new RespDecoder())
 									.addLast(new RespEncoder())
-									.addLast(new CommandHandler(redisCore));
+									.addLast(new CommandHandler(redisCore, aofFile));
 						}
 					});
 
@@ -161,6 +170,9 @@ public class RedisServer implements AutoCloseable {
 					cleanupIntervalMillis,
 					TimeUnit.MILLISECONDS
 			);
+		} catch (IOException e) {
+			stop();
+			throw new IllegalStateException("AOF初始化失败", e);
 		} catch (InterruptedException e) {
 			Thread.currentThread().interrupt();
 			stop();
@@ -226,6 +238,14 @@ public class RedisServer implements AutoCloseable {
 		}
 		if (workerFuture != null) {
 			workerFuture.syncUninterruptibly();
+		}
+
+		if (aofFile != null) {
+			try {
+				aofFile.close();
+			} catch (IOException e) {
+				throw new IllegalStateException("AOF文件关闭失败", e);
+			}
 		}
 	}
 

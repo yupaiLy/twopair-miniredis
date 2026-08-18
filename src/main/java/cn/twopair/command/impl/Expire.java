@@ -1,12 +1,17 @@
 package cn.twopair.command.impl;
 
-import cn.twopair.command.Command;
 import cn.twopair.command.CommandType;
+import cn.twopair.command.WriteCommand;
 import cn.twopair.core.RedisCore;
 import cn.twopair.datatype.BytesWrapper;
+import cn.twopair.datatype.RedisData;
 import cn.twopair.resp.BulkString;
 import cn.twopair.resp.Resp;
+import cn.twopair.resp.RespArray;
 import cn.twopair.resp.RespInt;
+
+import java.nio.charset.StandardCharsets;
+import java.util.List;
 
 /**
  * @author ljj
@@ -14,7 +19,7 @@ import cn.twopair.resp.RespInt;
  * @date 2026/7/16
  * @twopair
  */
-public class Expire implements Command {
+public class Expire implements WriteCommand {
 
 	private BytesWrapper key;
 	private long seconds;
@@ -77,6 +82,39 @@ public class Expire implements Command {
 			);
 		}
 		return parsedSeconds;
+	}
+
+	/**
+	 * 将成功设置TTL的EXPIRE转换成绝对时间PEXPIREAT。
+	 *
+	 * @param originalCommand 原始EXPIRE命令
+	 * @param redisCore       命令执行后的Redis核心存储
+	 * @return 适合写入AOF的命令
+	 */
+	@Override
+	public List<RespArray> toAofCommands(RespArray originalCommand, RedisCore redisCore) {
+		RedisData redisData = redisCore.get(key);
+
+		/*
+		 * key不存在或已被非正数EXPIRE删除时，保留原始命令，
+		 * 以便重放时维持删除或空操作语义。
+		 */
+		if (redisData == null || redisData.timeout() == -1L) {
+			return List.of(originalCommand);
+		}
+
+		RespArray expireAtCommand = new RespArray(new Resp[]{
+				new BulkString(new BytesWrapper(
+						"PEXPIREAT".getBytes(StandardCharsets.UTF_8)
+				)),
+				new BulkString(key),
+				new BulkString(new BytesWrapper(
+						String.valueOf(redisData.timeout())
+								.getBytes(StandardCharsets.UTF_8)
+				))
+		});
+
+		return List.of(expireAtCommand);
 	}
 
 	@Override

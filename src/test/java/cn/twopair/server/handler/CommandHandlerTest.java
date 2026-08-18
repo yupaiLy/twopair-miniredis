@@ -3,6 +3,10 @@ package cn.twopair.server.handler;
 import cn.twopair.core.RedisCore;
 import cn.twopair.core.impl.RedisCoreImpl;
 import cn.twopair.datatype.BytesWrapper;
+import cn.twopair.datatype.RedisData;
+import cn.twopair.datatype.RedisString;
+import cn.twopair.persistence.aof.AofFile;
+import cn.twopair.persistence.aof.AofReplay;
 import cn.twopair.resp.BulkString;
 import cn.twopair.resp.Resp;
 import cn.twopair.resp.RespArray;
@@ -16,7 +20,12 @@ import org.junit.Assert;
 import org.junit.Test;
 
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 
 
 /**
@@ -591,6 +600,229 @@ public class CommandHandlerTest {
 			Assert.assertTrue(channel.isOpen());
 		} finally {
 			channel.finishAndReleaseAll();
+		}
+	}
+
+	/**
+	 * 验证命令处理器只会把执行成功的写命令追加到AOF。
+	 *
+	 * @throws Exception 当临时文件或AOF读写失败时抛出
+	 */
+	@Test
+	public void testPersistOnlySuccessfulWriteCommands() throws Exception {
+		Path path = Files.createTempFile("twopair-miniredis-handler-", ".aof");
+
+		try {
+			RedisCore redisCore = new RedisCoreImpl();
+
+			try (AofFile aofFile = new AofFile(path)) {
+				EmbeddedChannel channel = new EmbeddedChannel(
+						new RespEncoder(),
+						new CommandHandler(redisCore, aofFile)
+				);
+
+				try {
+					channel.writeInbound(command("PING"));
+					Assert.assertEquals("+PONG\r\n", readOutboundAsString(channel));
+
+					channel.writeInbound(command("SET", "name", "twopair"));
+					Assert.assertEquals("+OK\r\n", readOutboundAsString(channel));
+
+					channel.writeInbound(command("GET", "name"));
+					Assert.assertEquals(
+							"$7\r\ntwopair\r\n",
+							readOutboundAsString(channel)
+					);
+
+					// 参数不完整的SET执行失败，不能污染AOF。
+					channel.writeInbound(command("SET", "broken"));
+					Assert.assertEquals(
+							"-ERR 命令执行失败\r\n",
+							readOutboundAsString(channel)
+					);
+				} finally {
+					channel.finishAndReleaseAll();
+				}
+			}
+
+			String expected = "*3\r\n"
+					+ "$3\r\nSET\r\n"
+					+ "$4\r\nname\r\n"
+					+ "$7\r\ntwopair\r\n";
+
+			Assert.assertArrayEquals(
+					expected.getBytes(StandardCharsets.UTF_8),
+					Files.readAllBytes(path)
+			);
+		} finally {
+			Files.deleteIfExists(path);
+		}
+	}
+
+	/**
+	 * 验证SETEX会以SET和绝对时间PEXPIREAT写入AOF，重放后不会延长TTL。
+	 *
+	 * @throws Exception 当临时文件或AOF读写失败时抛出
+	 */
+	@Test
+	public void testPersistSetExWithAbsoluteExpiration() throws Exception {
+		Path path = Files.createTempFile("twopair-miniredis-setex-", ".aof");
+		AtomicLong writeTime = new AtomicLong(1000L);
+
+		try {
+			RedisCore sourceCore = new RedisCoreImpl(writeTime::get);
+
+			try (AofFile aofFile = new AofFile(path)) {
+				EmbeddedChannel channel = new EmbeddedChannel(
+						new RespEncoder(),
+						new CommandHandler(sourceCore, aofFile)
+				);
+
+				try {
+					channel.writeInbound(command("SETEX", "name", "10", "twopair"));
+					Assert.assertEquals("+OK\r\n", readOutboundAsString(channel));
+				} finally {
+					channel.finishAndReleaseAll();
+				}
+			}
+
+			String aofContent = Files.readString(path, StandardCharsets.UTF_8);
+			Assert.assertTrue(aofContent.contains("SET\r\n"));
+			Assert.assertTrue(aofContent.contains("PEXPIREAT\r\n"));
+			Assert.assertFalse(aofContent.contains("SETEX\r\n"));
+
+			AtomicLong replayTime = new AtomicLong(5000L);
+			RedisCore restoredCore = new RedisCoreImpl(replayTime::get);
+			Assert.assertEquals(2, AofReplay.replay(path, restoredCore));
+
+			BytesWrapper key = new BytesWrapper(
+					"name".getBytes(StandardCharsets.UTF_8)
+			);
+			RedisData restoredData = restoredCore.get(key);
+			Assert.assertTrue(restoredData instanceof RedisString);
+			Assert.assertEquals(
+					"twopair",
+					((RedisString) restoredData).getValue().toUtf8String()
+			);
+			Assert.assertEquals(6L, restoredCore.ttl(key));
+
+			replayTime.set(11000L);
+			Assert.assertNull(restoredCore.get(key));
+		} finally {
+			Files.deleteIfExists(path);
+		}
+	}
+
+	/**
+	 * 验证多个连接并发写同一个key时，内存执行顺序与AOF记录顺序保持一致。
+	 *
+	 * @throws Exception 当线程等待、临时文件或AOF读写失败时抛出
+	 */
+	@Test
+	public void testKeepMemoryAndAofWriteOrderConsistent() throws Exception {
+		Path path = Files.createTempFile("twopair-miniredis-order-", ".aof");
+		CountDownLatch firstWriteApplied = new CountDownLatch(1);
+		CountDownLatch allowFirstWriteToReturn = new CountDownLatch(1);
+		CountDownLatch secondCommandCompleted = new CountDownLatch(1);
+		AtomicReference<Throwable> threadFailure = new AtomicReference<>();
+
+		RedisCoreImpl sourceCore = new RedisCoreImpl() {
+			@Override
+			public void put(BytesWrapper key, RedisData value) {
+				super.put(key, value);
+
+				if (value instanceof RedisString redisString
+						&& "first".equals(
+						redisString.getValue().toUtf8String()
+				)) {
+					firstWriteApplied.countDown();
+
+					try {
+						allowFirstWriteToReturn.await();
+					} catch (InterruptedException e) {
+						Thread.currentThread().interrupt();
+						throw new IllegalStateException("测试线程被中断", e);
+					}
+				}
+			}
+		};
+
+		try (AofFile aofFile = new AofFile(path)) {
+			EmbeddedChannel firstChannel = new EmbeddedChannel(
+					new RespEncoder(),
+					new CommandHandler(sourceCore, aofFile)
+			);
+			EmbeddedChannel secondChannel = new EmbeddedChannel(
+					new RespEncoder(),
+					new CommandHandler(sourceCore, aofFile)
+			);
+
+			Thread firstThread = new Thread(() -> {
+				try {
+					firstChannel.writeInbound(
+							command("SET", "name", "first")
+					);
+				} catch (Throwable e) {
+					threadFailure.compareAndSet(null, e);
+				}
+			}, "first-aof-writer");
+
+			Thread secondThread = new Thread(() -> {
+				try {
+					secondChannel.writeInbound(
+							command("SET", "name", "second")
+					);
+				} catch (Throwable e) {
+					threadFailure.compareAndSet(null, e);
+				} finally {
+					secondCommandCompleted.countDown();
+				}
+			}, "second-aof-writer");
+
+			try {
+				firstThread.start();
+				Assert.assertTrue(firstWriteApplied.await(1, TimeUnit.SECONDS));
+
+				secondThread.start();
+				/*
+				 * 修复前第二条命令会越过第一条并先写AOF；
+				 * 修复后它会等待第一条完成，因此这里允许短暂等待后统一放行。
+				 */
+				secondCommandCompleted.await(200, TimeUnit.MILLISECONDS);
+				allowFirstWriteToReturn.countDown();
+
+				firstThread.join(1000L);
+				secondThread.join(1000L);
+				Assert.assertFalse(firstThread.isAlive());
+				Assert.assertFalse(secondThread.isAlive());
+				Assert.assertNull(threadFailure.get());
+			} finally {
+				allowFirstWriteToReturn.countDown();
+				firstChannel.finishAndReleaseAll();
+				secondChannel.finishAndReleaseAll();
+			}
+		}
+
+		try {
+			BytesWrapper key = new BytesWrapper(
+					"name".getBytes(StandardCharsets.UTF_8)
+			);
+			RedisString memoryValue = (RedisString) sourceCore.get(key);
+
+			RedisCore restoredCore = new RedisCoreImpl();
+			AofReplay.replay(path, restoredCore);
+			RedisString restoredValue = (RedisString) restoredCore.get(key);
+
+			Assert.assertEquals(
+					memoryValue.getValue().toUtf8String(),
+					restoredValue.getValue().toUtf8String()
+			);
+			Assert.assertEquals(
+					"second",
+					restoredValue.getValue().toUtf8String()
+			);
+		} finally {
+			Files.deleteIfExists(path);
 		}
 	}
 }

@@ -25,6 +25,15 @@ public interface RedisCore {
 	boolean expire(BytesWrapper key, long seconds);
 
 	/**
+	 * 为指定key设置绝对毫秒过期时间。
+	 *
+	 * @param key            需要设置过期时间的key
+	 * @param expireAtMillis 绝对毫秒时间戳
+	 * @return key存在并成功处理时返回true
+	 */
+	boolean expireAt(BytesWrapper key, long expireAtMillis);
+
+	/**
 	 * @author ljj
 	 * @description 查询指定 key 剩余的存活秒数。
 	 * @date 2026/7/16

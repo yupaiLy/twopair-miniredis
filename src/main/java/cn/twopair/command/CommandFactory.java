@@ -1,6 +1,7 @@
 package cn.twopair.command;
 
 import cn.twopair.command.impl.Expire;
+import cn.twopair.command.impl.PExpireAt;
 import cn.twopair.command.impl.Ping;
 import cn.twopair.command.impl.Ttl;
 import cn.twopair.command.impl.string.Get;
@@ -48,6 +49,7 @@ public class CommandFactory {
 		COMMAND_MAP.put("SETEX", SetEx::new);
 		COMMAND_MAP.put("GET", Get::new);
 		COMMAND_MAP.put("EXPIRE", Expire::new);
+		COMMAND_MAP.put("PEXPIREAT", PExpireAt::new);
 		COMMAND_MAP.put("TTL", Ttl::new);
 	}
 

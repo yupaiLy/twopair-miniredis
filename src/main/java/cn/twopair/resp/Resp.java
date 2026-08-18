@@ -12,7 +12,6 @@ import static cn.twopair.datatype.BytesWrapper.CHARSET;
  * @twopair
  */
 public interface Resp {
-	//todo 先建 RESP 类型体系，暂不支持中文
 
 	/**
 	 * Encodes a given RESP (REdis Serialization Protocol) object into the provided ByteBuf buffer.
