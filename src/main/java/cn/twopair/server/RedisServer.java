@@ -9,6 +9,7 @@ import cn.twopair.server.codec.RespEncoder;
 import cn.twopair.server.handler.CommandHandler;
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.channel.Channel;
+import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelInitializer;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.MultiThreadIoEventLoopGroup;
@@ -16,6 +17,8 @@ import io.netty.channel.nio.NioIoHandler;
 import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
 import io.netty.util.concurrent.Future;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -34,6 +37,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * @twopair
  */
 public class RedisServer implements AutoCloseable {
+	private static final Logger LOGGER = LoggerFactory.getLogger(RedisServer.class);
 	public static final int DEFAULT_PORT = 6378;
 	private static final long DEFAULT_CLEANUP_INTERVAL_MILLIS = 1000L;
 
@@ -124,10 +128,19 @@ public class RedisServer implements AutoCloseable {
 	}
 
 	public void start() {
+		LOGGER.info(
+				"Redis服务开始启动: requestedPort={}, aofEnabled={}, aofPath={}, cleanupIntervalMs={}",
+				port,
+				aofPath != null,
+				aofPath,
+				cleanupIntervalMillis
+		);
+
 		try {
 			if (aofPath != null) {
 				// 必须先恢复历史数据，防止客户端看到只恢复了一部分的数据。
-				AofReplay.replay(aofPath, redisCore);
+				int replayedCount = AofReplay.replay(aofPath, redisCore);
+				LOGGER.info("AOF恢复完成: path={}, replayedCommands={}", aofPath.toAbsolutePath(), replayedCount);
 
 				// 重放完成后再打开文件，记录服务器运行期间的新写命令。
 				aofFile = new AofFile(aofPath);
@@ -158,28 +171,55 @@ public class RedisServer implements AutoCloseable {
 						}
 					});
 
-			// bind() 异步绑定；sync() 等待绑定完成后再返回。
-			serverChannel = bootstrap.bind(port).sync().channel();
+			/*
+			 * bind()异步绑定，await()只负责等待，不会把BindException以特殊方式重新抛出。
+			 * 显式检查Future可以准确区分端口绑定失败和前面的AOF初始化失败。
+			 */
+			ChannelFuture bindFuture = bootstrap.bind(port);
+			bindFuture.await();
+			if (!bindFuture.isSuccess()) {
+				throw new IllegalStateException("Redis服务端口绑定失败: port=" + port, bindFuture.cause());
+			}
+			serverChannel = bindFuture.channel();
+			LOGGER.info("Redis服务启动完成: localAddress={}", serverChannel.localAddress());
 			/*
 			 * 使用固定延迟：本次清理结束后，再等待指定时间执行下一次。
 			 * 避免清理速度跟不上时产生任务堆积。
 			 */
 			expirationCleanupTask = expirationExecutor.scheduleWithFixedDelay(
-					redisCore::removeExpired,
+					this::runExpirationCleanup,
 					cleanupIntervalMillis,
 					cleanupIntervalMillis,
 					TimeUnit.MILLISECONDS
 			);
 		} catch (IOException e) {
+			LOGGER.error("Redis服务AOF初始化失败: path={}", aofPath, e);
 			stop();
 			throw new IllegalStateException("AOF初始化失败", e);
 		} catch (InterruptedException e) {
 			Thread.currentThread().interrupt();
+			LOGGER.warn("Redis服务启动被中断", e);
 			stop();
 			throw new IllegalStateException("Redis服务启动被中断", e);
 		} catch (RuntimeException e) {
+			LOGGER.error("Redis服务启动失败", e);
 			stop();
 			throw e;
+		}
+	}
+
+	/**
+	 * 执行一次主动过期清理并记录清理结果。
+	 */
+	private void runExpirationCleanup() {
+		try {
+			int removedCount = redisCore.removeExpired();
+			if (removedCount > 0) {
+				LOGGER.debug("主动过期清理完成: removedKeys={}", removedCount);
+			}
+		} catch (RuntimeException e) {
+			// 定时任务抛出异常后将停止后续调度，因此必须在这里捕获并记录。
+			LOGGER.error("主动过期清理失败", e);
 		}
 	}
 
@@ -208,6 +248,8 @@ public class RedisServer implements AutoCloseable {
 		if (!closed.compareAndSet(false, true)) {
 			return;
 		}
+
+		LOGGER.info("Redis服务开始关闭: localAddress={}", serverChannel == null ? "未绑定" : serverChannel.localAddress());
 
 		if (expirationCleanupTask != null) {
 			// 不强制中断当前清理，但禁止后续调度。
@@ -244,9 +286,12 @@ public class RedisServer implements AutoCloseable {
 			try {
 				aofFile.close();
 			} catch (IOException e) {
+				LOGGER.error("AOF文件关闭失败: path={}", aofPath, e);
 				throw new IllegalStateException("AOF文件关闭失败", e);
 			}
 		}
+
+		LOGGER.info("Redis服务关闭完成");
 	}
 
 
@@ -270,6 +315,7 @@ public class RedisServer implements AutoCloseable {
 		} catch (InterruptedException e) {
 			// 恢复中断标记，由 Main 的 finally 负责关闭服务。
 			Thread.currentThread().interrupt();
+			LOGGER.warn("等待Redis服务关闭时线程被中断");
 		}
 	}
 }

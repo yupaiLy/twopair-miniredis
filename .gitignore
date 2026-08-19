@@ -41,3 +41,4 @@ build/
 
 ### MiniRedis runtime data ###
 /data/
+/logs/

@@ -4,6 +4,8 @@ import cn.twopair.resp.Resp;
 import cn.twopair.resp.RespArray;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -21,8 +23,10 @@ import java.util.Objects;
  * @twopair
  */
 public final class AofFile implements AutoCloseable {
+	private static final Logger LOGGER = LoggerFactory.getLogger(AofFile.class);
 
 	private final FileChannel channel;
+	private final Path path;
 
 	/**
 	 * 打开指定的AOF文件，不存在时自动创建。
@@ -40,12 +44,14 @@ public final class AofFile implements AutoCloseable {
 			Files.createDirectories(parent);
 		}
 
+		this.path = absolutePath;
 		this.channel = FileChannel.open(
 				absolutePath,
 				StandardOpenOption.CREATE,
 				StandardOpenOption.WRITE,
 				StandardOpenOption.APPEND
 		);
+		LOGGER.debug("AOF文件已打开: path={}", absolutePath);
 	}
 
 	/**
@@ -96,6 +102,7 @@ public final class AofFile implements AutoCloseable {
 
 			// 同一批命令只刷盘一次，减少磁盘同步次数。
 			channel.force(false);
+			LOGGER.debug("AOF追加完成: path={}, commands={}, bytes={}", path, commands.size(), bytes.length);
 		} finally {
 			buffer.release();
 		}
@@ -109,5 +116,6 @@ public final class AofFile implements AutoCloseable {
 	@Override
 	public synchronized void close() throws IOException {
 		channel.close();
+		LOGGER.debug("AOF文件已关闭: path={}", path);
 	}
 }

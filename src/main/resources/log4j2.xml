@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Configuration status="WARN" monitorInterval="30">
+    <Properties>
+        <Property name="LOG_DIR">${sys:miniredis.log.dir:-logs}</Property>
+        <Property name="LOG_PATTERN">%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%thread] [traceId=%X{traceId}] %logger{36} - %msg%n</Property>
+    </Properties>
+
+    <Appenders>
+        <Console name="Console" target="SYSTEM_OUT">
+            <PatternLayout charset="UTF-8" pattern="${LOG_PATTERN}"/>
+        </Console>
+
+        <RollingFile name="DailyFile"
+                     fileName="${LOG_DIR}/twopair-miniredis.log"
+                     filePattern="${LOG_DIR}/twopair-miniredis-%d{yyyy-MM-dd}-%i.log.gz">
+            <PatternLayout charset="UTF-8" pattern="${LOG_PATTERN}"/>
+            <Policies>
+                <TimeBasedTriggeringPolicy interval="1" modulate="true"/>
+                <SizeBasedTriggeringPolicy size="100 MB"/>
+            </Policies>
+            <DefaultRolloverStrategy max="30">
+                <Delete basePath="${LOG_DIR}" maxDepth="1">
+                    <IfFileName glob="twopair-miniredis-*.log.gz"/>
+                    <IfLastModified age="30d"/>
+                </Delete>
+            </DefaultRolloverStrategy>
+        </RollingFile>
+    </Appenders>
+
+    <Loggers>
+        <!-- 项目代码默认输出DEBUG，便于观察每条Redis命令。 -->
+        <Logger name="cn.twopair" level="${sys:miniredis.log.level:-debug}" additivity="false">
+            <AppenderRef ref="Console"/>
+            <AppenderRef ref="DailyFile"/>
+        </Logger>
+
+        <!-- 第三方库只保留INFO以上，避免Netty内部调试日志淹没业务命令。 -->
+        <Root level="info">
+            <AppenderRef ref="Console"/>
+            <AppenderRef ref="DailyFile"/>
+        </Root>
+    </Loggers>
+</Configuration>

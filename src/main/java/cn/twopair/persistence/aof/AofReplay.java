@@ -7,6 +7,8 @@ import cn.twopair.resp.Resp;
 import cn.twopair.resp.RespArray;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.nio.channels.FileChannel;
@@ -22,6 +24,7 @@ import java.util.Objects;
  * @twopair
  */
 public final class AofReplay {
+	private static final Logger LOGGER = LoggerFactory.getLogger(AofReplay.class);
 
 	private AofReplay() {
 	}
@@ -44,14 +47,18 @@ public final class AofReplay {
 
 		// 第一次启动时AOF文件可能尚未创建，应当视为没有历史数据。
 		if (!Files.exists(path)) {
+			LOGGER.debug("AOF文件不存在，跳过恢复: path={}", path.toAbsolutePath());
 			return 0;
 		}
 
 		byte[] bytes = Files.readAllBytes(path);
 
 		if (bytes.length == 0) {
+			LOGGER.debug("AOF文件为空，跳过恢复: path={}", path.toAbsolutePath());
 			return 0;
 		}
+
+		LOGGER.info("开始恢复AOF: path={}, bytes={}", path.toAbsolutePath(), bytes.length);
 
 		ByteBuf buffer = Unpooled.wrappedBuffer(bytes);
 		int replayedCount = 0;
@@ -67,6 +74,12 @@ public final class AofReplay {
 					 * 保留之前的完整命令，并删除无法恢复的尾部字节。
 					 */
 					truncateIncompleteTail(path, lastValidOffset);
+					LOGGER.warn(
+							"AOF末尾存在不完整命令，已截断: path={}, validBytes={}, discardedBytes={}",
+							path.toAbsolutePath(),
+							lastValidOffset,
+							bytes.length - lastValidOffset
+					);
 					return replayedCount;
 				}
 				if (!(resp instanceof RespArray commandArray)) {
@@ -76,6 +89,7 @@ public final class AofReplay {
 				}
 
 				Command command = CommandFactory.from(commandArray);
+				LOGGER.debug("重放AOF命令: index={}, command={}", replayedCount + 1, command.type());
 
 				// 重放阶段只恢复内存，不向客户端返回响应。
 				command.handle(redisCore);
@@ -85,6 +99,7 @@ public final class AofReplay {
 				lastValidOffset = buffer.readerIndex();
 			}
 
+			LOGGER.info("AOF恢复完成: path={}, replayedCommands={}", path.toAbsolutePath(), replayedCount);
 			return replayedCount;
 		} finally {
 			buffer.release();
