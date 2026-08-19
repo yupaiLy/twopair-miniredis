@@ -106,7 +106,7 @@ public interface RedisCore {
 	 * @return 本次新增的字段数量，覆盖已有字段不计数
 	 * @throws WrongTypeException key存在但不是Hash时抛出
 	 */
-	long hashSet(BytesWrapper key, Map<BytesWrapper, BytesWrapper> fields);
+	long putHashFields(BytesWrapper key, Map<BytesWrapper, BytesWrapper> fields);
 
 	/**
 	 * 原子地读取Hash中的指定字段。
@@ -116,7 +116,7 @@ public interface RedisCore {
 	 * @return 字段值；key或field不存在时返回null
 	 * @throws WrongTypeException key存在但不是Hash时抛出
 	 */
-	BytesWrapper hashGet(BytesWrapper key, BytesWrapper field);
+	BytesWrapper getHashField(BytesWrapper key, BytesWrapper field);
 
 	/**
 	 * 原子地删除Hash中的一个或多个字段。
@@ -126,7 +126,7 @@ public interface RedisCore {
 	 * @return 实际删除的字段数量
 	 * @throws WrongTypeException key存在但不是Hash时抛出
 	 */
-	long hashDelete(BytesWrapper key, List<BytesWrapper> fields);
+	long deleteHashFields(BytesWrapper key, List<BytesWrapper> fields);
 
 	/**
 	 * 原子地获取Hash包含的字段数量。
@@ -135,7 +135,16 @@ public interface RedisCore {
 	 * @return 字段数量；key不存在时返回0
 	 * @throws WrongTypeException key存在但不是Hash时抛出
 	 */
-	long hashLength(BytesWrapper key);
+	long getHashSize(BytesWrapper key);
 
+	/**
+	 * 原子地向Set添加一个或多个成员，不存在时自动创建Set。
+	 *
+	 * @param key     Set的key
+	 * @param members 需要添加的成员
+	 * @return 本次新增的成员数量，已存在成员不计数
+	 * @throws WrongTypeException key存在但不是Set时抛出
+	 */
+	long addSetMembers(BytesWrapper key, List<BytesWrapper> members);
 
 }

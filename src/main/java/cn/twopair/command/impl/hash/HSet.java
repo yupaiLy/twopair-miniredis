@@ -72,6 +72,6 @@ public class HSet implements WriteCommand {
 
 	@Override
 	public Resp handle(RedisCore redisCore) {
-		return new RespInt(redisCore.hashSet(key, fields));
+		return new RespInt(redisCore.putHashFields(key, fields));
 	}
 }

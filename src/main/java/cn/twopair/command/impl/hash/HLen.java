@@ -49,6 +49,6 @@ public class HLen implements Command {
 
 	@Override
 	public Resp handle(RedisCore redisCore) {
-		return new RespInt(redisCore.hashLength(key));
+		return new RespInt(redisCore.getHashSize(key));
 	}
 }

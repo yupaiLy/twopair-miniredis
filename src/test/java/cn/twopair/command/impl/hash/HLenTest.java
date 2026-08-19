@@ -27,7 +27,7 @@ public class HLenTest {
 	@Test
 	public void testHandle() {
 		RedisCore redisCore = new RedisCoreImpl();
-		redisCore.hashSet(bytes("user:1"), Map.of(bytes("name"), bytes("老板"), bytes("city"), bytes("杭州")));
+		redisCore.putHashFields(bytes("user:1"), Map.of(bytes("name"), bytes("老板"), bytes("city"), bytes("杭州")));
 		HLen existingCommand = command("user:1");
 		HLen missingCommand = command("missing");
 

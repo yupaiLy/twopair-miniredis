@@ -27,7 +27,7 @@ public class HGetTest {
 	@Test
 	public void testHandle() {
 		RedisCore redisCore = new RedisCoreImpl();
-		redisCore.hashSet(bytes("user:1"), Map.of(bytes("name"), bytes("老板")));
+		redisCore.putHashFields(bytes("user:1"), Map.of(bytes("name"), bytes("老板")));
 		HGet existingCommand = command("user:1", "name");
 		HGet missingFieldCommand = command("user:1", "missing");
 		HGet missingKeyCommand = command("missing", "name");

@@ -1114,7 +1114,7 @@ public class CommandHandlerTest {
 
 			RedisCore restoredCore = new RedisCoreImpl();
 			Assert.assertEquals(2, AofReplay.replay(path, restoredCore));
-			Assert.assertEquals("老板", restoredCore.hashGet(new BytesWrapper("user:1".getBytes(StandardCharsets.UTF_8)), new BytesWrapper("name".getBytes(StandardCharsets.UTF_8))).toUtf8String());
+			Assert.assertEquals("老板", restoredCore.getHashField(new BytesWrapper("user:1".getBytes(StandardCharsets.UTF_8)), new BytesWrapper("name".getBytes(StandardCharsets.UTF_8))).toUtf8String());
 		} finally {
 			Files.deleteIfExists(path);
 		}
@@ -1212,7 +1212,7 @@ public class CommandHandlerTest {
 
 			RedisCore restoredCore = new RedisCoreImpl();
 			Assert.assertEquals(2, AofReplay.replay(path, restoredCore));
-			Assert.assertEquals(2L, restoredCore.hashLength(new BytesWrapper("user:1".getBytes(StandardCharsets.UTF_8))));
+			Assert.assertEquals(2L, restoredCore.getHashSize(new BytesWrapper("user:1".getBytes(StandardCharsets.UTF_8))));
 		} finally {
 			Files.deleteIfExists(path);
 		}

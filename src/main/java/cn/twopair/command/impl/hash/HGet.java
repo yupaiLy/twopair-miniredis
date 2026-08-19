@@ -51,7 +51,7 @@ public class HGet implements Command {
 
 	@Override
 	public Resp handle(RedisCore redisCore) {
-		BytesWrapper value = redisCore.hashGet(key, field);
+		BytesWrapper value = redisCore.getHashField(key, field);
 
 		// key或field不存在时，Redis返回Null Bulk String。
 		if (value == null) {

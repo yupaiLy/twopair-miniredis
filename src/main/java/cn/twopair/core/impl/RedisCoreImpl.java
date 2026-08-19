@@ -6,6 +6,7 @@ import cn.twopair.datatype.BytesWrapper;
 import cn.twopair.datatype.RedisData;
 import cn.twopair.datatype.RedisHash;
 import cn.twopair.datatype.RedisList;
+import cn.twopair.datatype.RedisSet;
 
 import java.util.List;
 import java.util.Map;
@@ -341,7 +342,7 @@ public class RedisCoreImpl implements RedisCore {
 	}
 
 	@Override
-	public long hashSet(BytesWrapper key, Map<BytesWrapper, BytesWrapper> fields) {
+	public long putHashFields(BytesWrapper key, Map<BytesWrapper, BytesWrapper> fields) {
 		Objects.requireNonNull(key, "Hash的key不能为空");
 		Objects.requireNonNull(fields, "Hash字段不能为空");
 
@@ -379,7 +380,7 @@ public class RedisCoreImpl implements RedisCore {
 	}
 
 	@Override
-	public BytesWrapper hashGet(BytesWrapper key, BytesWrapper field) {
+	public BytesWrapper getHashField(BytesWrapper key, BytesWrapper field) {
 		Objects.requireNonNull(key, "Hash的key不能为空");
 		Objects.requireNonNull(field, "Hash的field不能为空");
 		AtomicReference<BytesWrapper> result = new AtomicReference<>();
@@ -404,7 +405,7 @@ public class RedisCoreImpl implements RedisCore {
 	}
 
 	@Override
-	public long hashDelete(BytesWrapper key, List<BytesWrapper> fields) {
+	public long deleteHashFields(BytesWrapper key, List<BytesWrapper> fields) {
 		Objects.requireNonNull(key, "Hash的key不能为空");
 		Objects.requireNonNull(fields, "Hash字段不能为空");
 
@@ -440,7 +441,7 @@ public class RedisCoreImpl implements RedisCore {
 	}
 
 	@Override
-	public long hashLength(BytesWrapper key) {
+	public long getHashSize(BytesWrapper key) {
 		Objects.requireNonNull(key, "Hash的key不能为空");
 		AtomicLong resultLength = new AtomicLong();
 
@@ -461,6 +462,44 @@ public class RedisCoreImpl implements RedisCore {
 		});
 
 		return resultLength.get();
+	}
+
+	@Override
+	public long addSetMembers(BytesWrapper key, List<BytesWrapper> members) {
+		Objects.requireNonNull(key, "Set的key不能为空");
+		Objects.requireNonNull(members, "Set成员不能为空");
+
+		if (members.isEmpty()) {
+			throw new IllegalArgumentException("Set成员不能为空");
+		}
+
+		AtomicLong addedCount = new AtomicLong();
+
+		map.compute(key, (currentKey, currentValue) -> {
+			long now = currentTimeMillis.getAsLong();
+
+			// 已过期的数据在逻辑上等同于不存在。
+			if (currentValue != null
+					&& currentValue.timeout() != -1L
+					&& currentValue.timeout() <= now) {
+				currentValue = null;
+			}
+
+			RedisSet redisSet;
+
+			if (currentValue == null) {
+				redisSet = new RedisSet();
+			} else if (currentValue instanceof RedisSet set) {
+				redisSet = set;
+			} else {
+				throw new WrongTypeException();
+			}
+
+			addedCount.set(redisSet.add(members));
+			return redisSet;
+		});
+
+		return addedCount.get();
 	}
 
 	/**

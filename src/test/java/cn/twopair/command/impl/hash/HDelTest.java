@@ -27,7 +27,7 @@ public class HDelTest {
 	@Test
 	public void testHandle() {
 		RedisCore redisCore = new RedisCoreImpl();
-		redisCore.hashSet(bytes("user:1"), Map.of(bytes("name"), bytes("老板"), bytes("city"), bytes("杭州"), bytes("age"), bytes("18")));
+		redisCore.putHashFields(bytes("user:1"), Map.of(bytes("name"), bytes("老板"), bytes("city"), bytes("杭州"), bytes("age"), bytes("18")));
 		HDel firstCommand = new HDel();
 		firstCommand.setContent(new Resp[]{bulk("HDEL"), bulk("user:1"), bulk("city"), bulk("missing"), bulk("city")});
 		HDel secondCommand = new HDel();

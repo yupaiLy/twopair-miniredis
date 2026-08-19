@@ -69,6 +69,6 @@ public class HDel implements WriteCommand {
 
 	@Override
 	public Resp handle(RedisCore redisCore) {
-		return new RespInt(redisCore.hashDelete(key, fields));
+		return new RespInt(redisCore.deleteHashFields(key, fields));
 	}
 }
