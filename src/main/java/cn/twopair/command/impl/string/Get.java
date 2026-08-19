@@ -3,16 +3,16 @@ package cn.twopair.command.impl.string;
 import cn.twopair.command.Command;
 import cn.twopair.command.CommandType;
 import cn.twopair.core.RedisCore;
+import cn.twopair.core.WrongTypeException;
 import cn.twopair.datatype.BytesWrapper;
 import cn.twopair.datatype.RedisData;
 import cn.twopair.datatype.RedisString;
 import cn.twopair.resp.BulkString;
 import cn.twopair.resp.Resp;
-import io.netty.handler.codec.quic.QuicPathEvent;
 
 /**
  * @author ljj
- * @description
+ * @description 实现Redis的GET命令，读取String类型的值。
  * @date 2026/7/10
  * @twopair
  */
@@ -24,28 +24,50 @@ public class Get implements Command {
 		return CommandType.GET;
 	}
 
+	/**
+	 * 解析GET命令参数。
+	 *
+	 * @param array 命令数组，格式为GET key
+	 */
 	@Override
 	public void setContent(Resp[] array) {
-		this.key = ((BulkString) array[1]).getBytesWrapper();
+		if (array == null || array.length != 2) {
+			throw new IllegalArgumentException("GET命令需要key一个参数");
+		}
 
+		if (!(array[1] instanceof BulkString keyBulkString)) {
+			throw new IllegalArgumentException("GET的key必须是BulkString");
+		}
+
+		BytesWrapper parsedKey = keyBulkString.getBytesWrapper();
+
+		if (parsedKey == null || parsedKey.getByteArray() == null) {
+			throw new IllegalArgumentException("GET的key不能是NIL");
+		}
+
+		this.key = parsedKey;
 	}
 
 	/**
-	 * Handles the Redis `GET` command, which retrieves the value associated with a given key.
-	 * If the key does not exist, returns a NIL bulk string.
-	 * Throws an exception if the value associated with the key is not a string.
+	 * 读取key对应的String值。
 	 *
-	 * @param redisCore the core Redis interface used to interact with the Redis data store
-	 * @return a RESP representation of the string value associated with the provided key, or NIL if the key does not exist
-	 * @throws IllegalStateException if the value associated with the key is not of type RedisString
+	 * @param redisCore Redis核心存储
+	 * @return 字符串值；key不存在时返回NIL
+	 * @throws WrongTypeException key存在但不是String时抛出
 	 */
 	@Override
 	public Resp handle(RedisCore redisCore) {
-		if(!redisCore.exist(key)) return BulkString.NIL;
 		RedisData redisData = redisCore.get(key);
-		if(redisData instanceof RedisString){
-			return new BulkString(((RedisString) redisData).getValue());
+
+		// key不存在（或读取瞬间刚好过期）时返回NIL，与Redis语义一致。
+		if (redisData == null) {
+			return BulkString.NIL;
 		}
-		throw new IllegalStateException("value不是String类型");
+
+		if (!(redisData instanceof RedisString redisString)) {
+			throw new WrongTypeException();
+		}
+
+		return new BulkString(redisString.getValue());
 	}
 }
