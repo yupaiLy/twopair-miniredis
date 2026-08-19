@@ -8,7 +8,10 @@ package cn.twopair.command;
  */
 public enum CommandType {
 	PING,
+	SELECT,
 	SCAN,
+	TYPE,
+	DEL,
 	SET,
 	SETEX,
 	GET,

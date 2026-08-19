@@ -19,6 +19,13 @@ public interface RedisCore {
 
 	boolean exist(BytesWrapper key);
 
+	/**
+	 * 原子地删除一个或多个key，已过期的数据在逻辑上等同于不存在。
+	 *
+	 * @param keys 需要删除的key
+	 * @return 实际删除的key数量
+	 */
+	long delete(List<BytesWrapper> keys);
 
 	/**
 	 * @author ljj

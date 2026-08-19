@@ -89,6 +89,7 @@ public class RedisCoreImpl implements RedisCore {
 			 * 防止其他 Worker 刚写入新值，却被当前线程误删。
 			 */
 			if (map.remove(key, redisData)) {
+				LOGGER.debug("惰性过期删除完成");
 				return null;
 			}
 
@@ -103,6 +104,48 @@ public class RedisCoreImpl implements RedisCore {
 		return get(key) != null;
 	}
 
+	/**
+	 * 删除一个或多个key，已过期的数据在逻辑上等同于不存在。
+	 *
+	 * @param keys 需要删除的key
+	 * @return 实际删除的key数量
+	 */
+	@Override
+	public long delete(List<BytesWrapper> keys) {
+		Objects.requireNonNull(keys, "删除的key不能为空");
+
+		if (keys.isEmpty()) {
+			throw new IllegalArgumentException("删除的key不能为空");
+		}
+
+		long deletedCount = 0L;
+
+		for (BytesWrapper key : keys) {
+			Objects.requireNonNull(key, "删除的key不能为空");
+
+			/*
+			 * 沿用expire立即删除的惯用法：
+			 * get内部已经完成过期检测和惰性删除，
+			 * 条件删除只移除刚才读取到的对象，防止误删并发写入的新值。
+			 */
+			while (true) {
+				RedisData redisData = get(key);
+
+				// key不存在或已过期，逻辑上等同于没有删除任何数据。
+				if (redisData == null) {
+					break;
+				}
+
+				if (map.remove(key, redisData)) {
+					deletedCount++;
+					break;
+				}
+
+				// 数据已被其他线程替换，重新读取后再删除。
+			}
+		}
+
+		return deletedCount;
 	}
 
 	/**
@@ -636,6 +679,14 @@ public class RedisCoreImpl implements RedisCore {
 		return result.get();
 	}
 
+	/**
+	 * 获取当前所有未过期key的弱一致性快照。
+	 *
+	 * <p>ConcurrentHashMap的遍历不会阻塞并发读写，因此扫描期间新增或删除的key
+	 * 不保证一定出现在本次结果中，这与Redis SCAN的弱一致性语义相符。</p>
+	 *
+	 * @return 按字节顺序排列的有效key列表
+	 */
 	@Override
 	public List<BytesWrapper> scanKeys() {
 		long now = currentTimeMillis.getAsLong();

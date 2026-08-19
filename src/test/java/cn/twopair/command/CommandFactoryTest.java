@@ -1,9 +1,12 @@
 package cn.twopair.command;
 
+import cn.twopair.command.impl.Del;
 import cn.twopair.command.impl.Expire;
 import cn.twopair.command.impl.Ping;
+import cn.twopair.command.impl.Select;
 import cn.twopair.command.impl.Scan;
 import cn.twopair.command.impl.Ttl;
+import cn.twopair.command.impl.Type;
 import cn.twopair.command.impl.hash.HDel;
 import cn.twopair.command.impl.hash.HGet;
 import cn.twopair.command.impl.hash.HLen;
@@ -314,6 +317,18 @@ public class CommandFactoryTest {
 	 * 验证命令工厂能够根据小写SELECT 0请求创建兼容命令。
 	 */
 	@Test
+	public void testCreateSelect() {
+		RespArray array = new RespArray(new Resp[]{
+				new BulkString(new BytesWrapper("select".getBytes(StandardCharsets.UTF_8))),
+				new BulkString(new BytesWrapper("0".getBytes(StandardCharsets.UTF_8)))
+		});
+
+		Command command = CommandFactory.from(array);
+
+		Assert.assertTrue(command instanceof Select);
+		Assert.assertEquals(CommandType.SELECT, command.type());
+	}
+
 	/**
 	 * 验证命令工厂能够创建带MATCH和COUNT选项的SCAN命令。
 	 */
@@ -338,6 +353,18 @@ public class CommandFactoryTest {
 	 * 验证命令工厂能够根据小写TYPE请求创建命令。
 	 */
 	@Test
+	public void testCreateType() {
+		RespArray array = new RespArray(new Resp[]{
+				new BulkString(new BytesWrapper("type".getBytes(StandardCharsets.UTF_8))),
+				new BulkString(new BytesWrapper("name".getBytes(StandardCharsets.UTF_8)))
+		});
+
+		Command command = CommandFactory.from(array);
+
+		Assert.assertTrue(command instanceof Type);
+		Assert.assertEquals(CommandType.TYPE, command.type());
+	}
+
 	/**
 	 * 验证命令工厂能够创建HSCAN命令。
 	 */
@@ -376,6 +403,19 @@ public class CommandFactoryTest {
 	 * 验证命令工厂能够根据小写DEL请求创建对应命令。
 	 */
 	@Test
+	public void testCreateDel() {
+		RespArray array = new RespArray(new Resp[]{
+				new BulkString(new BytesWrapper("del".getBytes(StandardCharsets.UTF_8))),
+				new BulkString(new BytesWrapper("name".getBytes(StandardCharsets.UTF_8))),
+				new BulkString(new BytesWrapper("city".getBytes(StandardCharsets.UTF_8)))
+		});
+
+		Command command = CommandFactory.from(array);
+
+		Assert.assertTrue(command instanceof Del);
+		Assert.assertEquals(CommandType.DEL, command.type());
+	}
+
 
 	@Test
 	public void testUnsupportedCommand() {

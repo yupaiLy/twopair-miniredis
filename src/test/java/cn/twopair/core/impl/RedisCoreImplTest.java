@@ -774,6 +774,34 @@ public class RedisCoreImplTest {
 	 * 验证DEL只计数存在的key，已过期的数据等同于不存在并被顺手清理。
 	 */
 	@Test
+	public void testDelete() {
+		AtomicLong currentTime = new AtomicLong(1000L);
+		RedisCore redisCore = new RedisCoreImpl(currentTime::get);
+		redisCore.put(bytes("name"), new RedisString(bytes("twopair")));
+
+		RedisString expiredValue = new RedisString(bytes("old"));
+		expiredValue.setTimeout(1000L);
+		redisCore.put(bytes("expired"), expiredValue);
+
+		// name存在、missing不存在、expired已过期，只计数name。
+		Assert.assertEquals(1L, redisCore.delete(List.of(bytes("name"), bytes("missing"), bytes("expired"))));
+		Assert.assertNull(redisCore.get(bytes("name")));
+
+		// 过期数据虽不计数，但已被顺手清理。
+		Assert.assertNull(redisCore.get(bytes("expired")));
+
+		// 全部删除后重复删除返回0。
+		Assert.assertEquals(0L, redisCore.delete(List.of(bytes("name"))));
+
+		// 空key列表属于参数错误，与其他批量操作的防御保持一致。
+		try {
+			redisCore.delete(List.of());
+			Assert.fail("空key列表应抛出IllegalArgumentException");
+		} catch (IllegalArgumentException ignored) {
+			// 预期异常。
+		}
+	}
+
 	/**
 	 * 将字符串转换成UTF-8字节包装器。
 	 *

@@ -1421,6 +1421,26 @@ public class CommandHandlerTest {
 	 * 验证客户端连接时发送SELECT 0能够成功，非零数据库返回错误且连接保持可用。
 	 */
 	@Test
+	public void testHandleSelectZeroCompatibility() {
+		RedisCore redisCore = new RedisCoreImpl();
+		EmbeddedChannel channel = new EmbeddedChannel(new RespEncoder(), new CommandHandler(redisCore));
+
+		try {
+			channel.writeInbound(command("SELECT", "0"));
+			Assert.assertEquals("+OK\r\n", readOutboundAsString(channel));
+
+			channel.writeInbound(command("SELECT", "1"));
+			Assert.assertEquals("-ERR 当前仅支持database 0\r\n", readOutboundAsString(channel));
+			Assert.assertTrue(channel.isOpen());
+
+			// 参数错误后连接仍然可以继续执行普通命令。
+			channel.writeInbound(command("PING"));
+			Assert.assertEquals("+PONG\r\n", readOutboundAsString(channel));
+		} finally {
+			channel.finishAndReleaseAll();
+		}
+	}
+
 	/**
 	 * 验证GUI常用的SCAN 0 MATCH * COUNT请求返回标准游标与key数组。
 	 */
@@ -1444,7 +1464,32 @@ public class CommandHandlerTest {
 		}
 	}
 
+	/**
+	 * 验证GUI查看字符串key时使用的SET、TYPE、GET完整协议链路。
+	 */
 	@Test
+	public void testHandleTypeCompatibility() {
+		RedisCore redisCore = new RedisCoreImpl();
+		EmbeddedChannel channel = new EmbeddedChannel(new RespEncoder(), new CommandHandler(redisCore));
+
+		try {
+			channel.writeInbound(command("SET", "name", "twopair"));
+			Assert.assertEquals("+OK\r\n", readOutboundAsString(channel));
+
+			channel.writeInbound(command("TYPE", "name"));
+			Assert.assertEquals("+string\r\n", readOutboundAsString(channel));
+
+			channel.writeInbound(command("GET", "name"));
+			Assert.assertEquals("$7\r\ntwopair\r\n", readOutboundAsString(channel));
+
+			channel.writeInbound(command("TYPE", "missing"));
+			Assert.assertEquals("+none\r\n", readOutboundAsString(channel));
+			Assert.assertTrue(channel.isOpen());
+		} finally {
+			channel.finishAndReleaseAll();
+		}
+	}
+
 	/**
 	 * 验证GUI读取Hash和Set内容时使用的HSCAN、SSCAN协议结构。
 	 */

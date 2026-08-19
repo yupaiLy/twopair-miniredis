@@ -76,7 +76,10 @@ public class CommandFactory {
 		COMMAND_MAP.put("SISMEMBER", SIsMember::new);
 		COMMAND_MAP.put("SCARD", SCard::new);
 		COMMAND_MAP.put("SSCAN", SScan::new);
+		COMMAND_MAP.put("SELECT", Select::new);
 		COMMAND_MAP.put("SCAN", Scan::new);
+		COMMAND_MAP.put("TYPE", Type::new);
+		COMMAND_MAP.put("DEL", Del::new);
 	}
 
 	private CommandFactory() {
