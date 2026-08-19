@@ -1,6 +1,5 @@
 package cn.twopair.command.impl.string;
 
-import cn.twopair.command.Command;
 import cn.twopair.command.CommandType;
 import cn.twopair.command.WriteCommand;
 import cn.twopair.core.RedisCore;

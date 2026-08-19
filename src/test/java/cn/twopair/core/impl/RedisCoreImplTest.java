@@ -2,11 +2,7 @@ package cn.twopair.core.impl;
 
 import cn.twopair.core.RedisCore;
 import cn.twopair.core.WrongTypeException;
-import cn.twopair.datatype.BytesWrapper;
-import cn.twopair.datatype.RedisHash;
-import cn.twopair.datatype.RedisList;
-import cn.twopair.datatype.RedisSet;
-import cn.twopair.datatype.RedisString;
+import cn.twopair.datatype.*;
 import org.junit.Assert;
 import org.junit.Test;
 

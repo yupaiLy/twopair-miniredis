@@ -1,20 +1,12 @@
 package cn.twopair.command;
 
 import cn.twopair.command.impl.*;
-import cn.twopair.command.impl.hash.HDel;
-import cn.twopair.command.impl.hash.HGet;
-import cn.twopair.command.impl.hash.HLen;
-import cn.twopair.command.impl.hash.HScan;
-import cn.twopair.command.impl.hash.HSet;
+import cn.twopair.command.impl.hash.*;
 import cn.twopair.command.impl.list.LLen;
 import cn.twopair.command.impl.list.LPop;
 import cn.twopair.command.impl.list.LPush;
 import cn.twopair.command.impl.list.LRange;
-import cn.twopair.command.impl.set.SAdd;
-import cn.twopair.command.impl.set.SCard;
-import cn.twopair.command.impl.set.SIsMember;
-import cn.twopair.command.impl.set.SRem;
-import cn.twopair.command.impl.set.SScan;
+import cn.twopair.command.impl.set.*;
 import cn.twopair.command.impl.string.Get;
 import cn.twopair.command.impl.string.Set;
 import cn.twopair.command.impl.string.SetEx;
