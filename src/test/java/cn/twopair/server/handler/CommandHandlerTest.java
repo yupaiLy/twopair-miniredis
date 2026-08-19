@@ -4,6 +4,7 @@ import cn.twopair.core.RedisCore;
 import cn.twopair.core.impl.RedisCoreImpl;
 import cn.twopair.datatype.BytesWrapper;
 import cn.twopair.datatype.RedisData;
+import cn.twopair.datatype.RedisHash;
 import cn.twopair.datatype.RedisList;
 import cn.twopair.datatype.RedisString;
 import cn.twopair.persistence.aof.AofFile;
@@ -1021,4 +1022,199 @@ public class CommandHandlerTest {
 		}
 	}
 
+	/**
+	 * 验证HSET的新增计数、覆盖语义、WRONGTYPE错误和AOF重放。
+	 *
+	 * @throws Exception 当临时文件或AOF读写失败时抛出
+	 */
+	@Test
+	public void testHandleHSetWithAof() throws Exception {
+		Path path = Files.createTempFile("twopair-miniredis-hset-", ".aof");
+
+		try {
+			RedisCore sourceCore = new RedisCoreImpl();
+
+			try (AofFile aofFile = new AofFile(path)) {
+				EmbeddedChannel channel = new EmbeddedChannel(new RespEncoder(), new CommandHandler(sourceCore, aofFile));
+
+				try {
+					channel.writeInbound(command("HSET", "user:1", "name", "twopair", "city", "杭州"));
+					Assert.assertEquals(":2\r\n", readOutboundAsString(channel));
+
+					channel.writeInbound(command("HSET", "user:1", "name", "老板", "age", "18"));
+					Assert.assertEquals(":1\r\n", readOutboundAsString(channel));
+
+					channel.writeInbound(command("SET", "name", "twopair"));
+					Assert.assertEquals("+OK\r\n", readOutboundAsString(channel));
+
+					channel.writeInbound(command("HSET", "name", "field", "should-not-persist"));
+					Assert.assertEquals("-WRONGTYPE Operation against a key holding the wrong kind of value\r\n", readOutboundAsString(channel));
+					Assert.assertTrue(channel.isOpen());
+				} finally {
+					channel.finishAndReleaseAll();
+				}
+			}
+
+			String aofContent = Files.readString(path, StandardCharsets.UTF_8);
+			Assert.assertTrue(aofContent.contains("HSET"));
+			Assert.assertFalse(aofContent.contains("should-not-persist"));
+
+			RedisCore restoredCore = new RedisCoreImpl();
+			Assert.assertEquals(3, AofReplay.replay(path, restoredCore));
+			RedisHash restoredHash = (RedisHash) restoredCore.get(new BytesWrapper("user:1".getBytes(StandardCharsets.UTF_8)));
+			Assert.assertEquals("老板", restoredHash.get(new BytesWrapper("name".getBytes(StandardCharsets.UTF_8))).toUtf8String());
+			Assert.assertEquals("杭州", restoredHash.get(new BytesWrapper("city".getBytes(StandardCharsets.UTF_8))).toUtf8String());
+			Assert.assertEquals("18", restoredHash.get(new BytesWrapper("age".getBytes(StandardCharsets.UTF_8))).toUtf8String());
+		} finally {
+			Files.deleteIfExists(path);
+		}
+	}
+
+	/**
+	 * 验证HGET的字段响应、NIL响应、WRONGTYPE错误，并且不会写入AOF。
+	 *
+	 * @throws Exception 当临时文件或AOF读写失败时抛出
+	 */
+	@Test
+	public void testHandleHGetWithoutAofAppend() throws Exception {
+		Path path = Files.createTempFile("twopair-miniredis-hget-", ".aof");
+
+		try {
+			RedisCore sourceCore = new RedisCoreImpl();
+
+			try (AofFile aofFile = new AofFile(path)) {
+				EmbeddedChannel channel = new EmbeddedChannel(new RespEncoder(), new CommandHandler(sourceCore, aofFile));
+
+				try {
+					channel.writeInbound(command("HSET", "user:1", "name", "老板"));
+					Assert.assertEquals(":1\r\n", readOutboundAsString(channel));
+
+					channel.writeInbound(command("HGET", "user:1", "name"));
+					Assert.assertEquals("$6\r\n老板\r\n", readOutboundAsString(channel));
+
+					channel.writeInbound(command("HGET", "user:1", "missing"));
+					Assert.assertEquals("$-1\r\n", readOutboundAsString(channel));
+
+					channel.writeInbound(command("HGET", "missing", "name"));
+					Assert.assertEquals("$-1\r\n", readOutboundAsString(channel));
+
+					channel.writeInbound(command("SET", "name", "twopair"));
+					Assert.assertEquals("+OK\r\n", readOutboundAsString(channel));
+
+					channel.writeInbound(command("HGET", "name", "field"));
+					Assert.assertEquals("-WRONGTYPE Operation against a key holding the wrong kind of value\r\n", readOutboundAsString(channel));
+					Assert.assertTrue(channel.isOpen());
+				} finally {
+					channel.finishAndReleaseAll();
+				}
+			}
+
+			String aofContent = Files.readString(path, StandardCharsets.UTF_8);
+			Assert.assertFalse(aofContent.contains("HGET"));
+
+			RedisCore restoredCore = new RedisCoreImpl();
+			Assert.assertEquals(2, AofReplay.replay(path, restoredCore));
+			Assert.assertEquals("老板", restoredCore.hashGet(new BytesWrapper("user:1".getBytes(StandardCharsets.UTF_8)), new BytesWrapper("name".getBytes(StandardCharsets.UTF_8))).toUtf8String());
+		} finally {
+			Files.deleteIfExists(path);
+		}
+	}
+
+	/**
+	 * 验证HDEL的删除计数、空Hash删key、WRONGTYPE错误和AOF重放。
+	 *
+	 * @throws Exception 当临时文件或AOF读写失败时抛出
+	 */
+	@Test
+	public void testHandleHDelWithAof() throws Exception {
+		Path path = Files.createTempFile("twopair-miniredis-hdel-", ".aof");
+
+		try {
+			RedisCore sourceCore = new RedisCoreImpl();
+
+			try (AofFile aofFile = new AofFile(path)) {
+				EmbeddedChannel channel = new EmbeddedChannel(new RespEncoder(), new CommandHandler(sourceCore, aofFile));
+
+				try {
+					channel.writeInbound(command("HSET", "user:1", "name", "老板", "city", "杭州", "age", "18"));
+					Assert.assertEquals(":3\r\n", readOutboundAsString(channel));
+
+					channel.writeInbound(command("HDEL", "user:1", "city", "missing"));
+					Assert.assertEquals(":1\r\n", readOutboundAsString(channel));
+
+					channel.writeInbound(command("HDEL", "user:1", "name", "age"));
+					Assert.assertEquals(":2\r\n", readOutboundAsString(channel));
+
+					channel.writeInbound(command("HDEL", "user:1", "name"));
+					Assert.assertEquals(":0\r\n", readOutboundAsString(channel));
+
+					channel.writeInbound(command("SET", "name", "twopair"));
+					Assert.assertEquals("+OK\r\n", readOutboundAsString(channel));
+
+					channel.writeInbound(command("HDEL", "name", "field"));
+					Assert.assertEquals("-WRONGTYPE Operation against a key holding the wrong kind of value\r\n", readOutboundAsString(channel));
+					Assert.assertTrue(channel.isOpen());
+				} finally {
+					channel.finishAndReleaseAll();
+				}
+			}
+
+			String aofContent = Files.readString(path, StandardCharsets.UTF_8);
+			Assert.assertTrue(aofContent.contains("HDEL"));
+
+			RedisCore restoredCore = new RedisCoreImpl();
+			Assert.assertEquals(5, AofReplay.replay(path, restoredCore));
+			Assert.assertNull(restoredCore.get(new BytesWrapper("user:1".getBytes(StandardCharsets.UTF_8))));
+			Assert.assertEquals("twopair", ((RedisString) restoredCore.get(new BytesWrapper("name".getBytes(StandardCharsets.UTF_8)))).getValue().toUtf8String());
+		} finally {
+			Files.deleteIfExists(path);
+		}
+	}
+
+	/**
+	 * 验证HLEN的字段数量、WRONGTYPE错误，并且不会写入AOF。
+	 *
+	 * @throws Exception 当临时文件或AOF读写失败时抛出
+	 */
+	@Test
+	public void testHandleHLenWithoutAofAppend() throws Exception {
+		Path path = Files.createTempFile("twopair-miniredis-hlen-", ".aof");
+
+		try {
+			RedisCore sourceCore = new RedisCoreImpl();
+
+			try (AofFile aofFile = new AofFile(path)) {
+				EmbeddedChannel channel = new EmbeddedChannel(new RespEncoder(), new CommandHandler(sourceCore, aofFile));
+
+				try {
+					channel.writeInbound(command("HSET", "user:1", "name", "老板", "city", "杭州"));
+					Assert.assertEquals(":2\r\n", readOutboundAsString(channel));
+
+					channel.writeInbound(command("HLEN", "user:1"));
+					Assert.assertEquals(":2\r\n", readOutboundAsString(channel));
+
+					channel.writeInbound(command("HLEN", "missing"));
+					Assert.assertEquals(":0\r\n", readOutboundAsString(channel));
+
+					channel.writeInbound(command("SET", "name", "twopair"));
+					Assert.assertEquals("+OK\r\n", readOutboundAsString(channel));
+
+					channel.writeInbound(command("HLEN", "name"));
+					Assert.assertEquals("-WRONGTYPE Operation against a key holding the wrong kind of value\r\n", readOutboundAsString(channel));
+					Assert.assertTrue(channel.isOpen());
+				} finally {
+					channel.finishAndReleaseAll();
+				}
+			}
+
+			String aofContent = Files.readString(path, StandardCharsets.UTF_8);
+			Assert.assertFalse(aofContent.contains("HLEN"));
+
+			RedisCore restoredCore = new RedisCoreImpl();
+			Assert.assertEquals(2, AofReplay.replay(path, restoredCore));
+			Assert.assertEquals(2L, restoredCore.hashLength(new BytesWrapper("user:1".getBytes(StandardCharsets.UTF_8))));
+		} finally {
+			Files.deleteIfExists(path);
+		}
+	}
 }

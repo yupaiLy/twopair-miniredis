@@ -3,6 +3,10 @@ package cn.twopair.command;
 import cn.twopair.command.impl.Expire;
 import cn.twopair.command.impl.Ping;
 import cn.twopair.command.impl.Ttl;
+import cn.twopair.command.impl.hash.HDel;
+import cn.twopair.command.impl.hash.HGet;
+import cn.twopair.command.impl.hash.HLen;
+import cn.twopair.command.impl.hash.HSet;
 import cn.twopair.command.impl.list.LLen;
 import cn.twopair.command.impl.list.LPop;
 import cn.twopair.command.impl.list.LPush;
@@ -164,6 +168,73 @@ public class CommandFactoryTest {
 		Assert.assertEquals(CommandType.LRANGE, command.type());
 	}
 
+	/**
+	 * 验证命令工厂能够根据小写HSET请求创建对应命令。
+	 */
+	@Test
+	public void testCreateHSet() {
+		RespArray array = new RespArray(new Resp[]{
+				new BulkString(new BytesWrapper("hset".getBytes(StandardCharsets.UTF_8))),
+				new BulkString(new BytesWrapper("user:1".getBytes(StandardCharsets.UTF_8))),
+				new BulkString(new BytesWrapper("name".getBytes(StandardCharsets.UTF_8))),
+				new BulkString(new BytesWrapper("twopair".getBytes(StandardCharsets.UTF_8)))
+		});
+
+		Command command = CommandFactory.from(array);
+
+		Assert.assertTrue(command instanceof HSet);
+		Assert.assertEquals(CommandType.HSET, command.type());
+	}
+
+	/**
+	 * 验证命令工厂能够根据小写HGET请求创建对应命令。
+	 */
+	@Test
+	public void testCreateHGet() {
+		RespArray array = new RespArray(new Resp[]{
+				new BulkString(new BytesWrapper("hget".getBytes(StandardCharsets.UTF_8))),
+				new BulkString(new BytesWrapper("user:1".getBytes(StandardCharsets.UTF_8))),
+				new BulkString(new BytesWrapper("name".getBytes(StandardCharsets.UTF_8)))
+		});
+
+		Command command = CommandFactory.from(array);
+
+		Assert.assertTrue(command instanceof HGet);
+		Assert.assertEquals(CommandType.HGET, command.type());
+	}
+
+	/**
+	 * 验证命令工厂能够根据小写HDEL请求创建对应命令。
+	 */
+	@Test
+	public void testCreateHDel() {
+		RespArray array = new RespArray(new Resp[]{
+				new BulkString(new BytesWrapper("hdel".getBytes(StandardCharsets.UTF_8))),
+				new BulkString(new BytesWrapper("user:1".getBytes(StandardCharsets.UTF_8))),
+				new BulkString(new BytesWrapper("name".getBytes(StandardCharsets.UTF_8)))
+		});
+
+		Command command = CommandFactory.from(array);
+
+		Assert.assertTrue(command instanceof HDel);
+		Assert.assertEquals(CommandType.HDEL, command.type());
+	}
+
+	/**
+	 * 验证命令工厂能够根据小写HLEN请求创建对应命令。
+	 */
+	@Test
+	public void testCreateHLen() {
+		RespArray array = new RespArray(new Resp[]{
+				new BulkString(new BytesWrapper("hlen".getBytes(StandardCharsets.UTF_8))),
+				new BulkString(new BytesWrapper("user:1".getBytes(StandardCharsets.UTF_8)))
+		});
+
+		Command command = CommandFactory.from(array);
+
+		Assert.assertTrue(command instanceof HLen);
+		Assert.assertEquals(CommandType.HLEN, command.type());
+	}
 
 
 	@Test

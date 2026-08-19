@@ -4,6 +4,10 @@ import cn.twopair.command.impl.Expire;
 import cn.twopair.command.impl.PExpireAt;
 import cn.twopair.command.impl.Ping;
 import cn.twopair.command.impl.Ttl;
+import cn.twopair.command.impl.hash.HDel;
+import cn.twopair.command.impl.hash.HGet;
+import cn.twopair.command.impl.hash.HLen;
+import cn.twopair.command.impl.hash.HSet;
 import cn.twopair.command.impl.list.LLen;
 import cn.twopair.command.impl.list.LPop;
 import cn.twopair.command.impl.list.LPush;
@@ -59,6 +63,10 @@ public class CommandFactory {
 		COMMAND_MAP.put("LPOP", LPop::new);
 		COMMAND_MAP.put("LLEN", LLen::new);
 		COMMAND_MAP.put("LRANGE", LRange::new);
+		COMMAND_MAP.put("HSET", HSet::new);
+		COMMAND_MAP.put("HGET", HGet::new);
+		COMMAND_MAP.put("HDEL", HDel::new);
+		COMMAND_MAP.put("HLEN", HLen::new);
 	}
 
 	private CommandFactory() {

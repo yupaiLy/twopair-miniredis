@@ -4,6 +4,7 @@ import cn.twopair.datatype.BytesWrapper;
 import cn.twopair.datatype.RedisData;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * @author ljj
@@ -97,6 +98,44 @@ public interface RedisCore {
 	 */
 	List<BytesWrapper> listRange(BytesWrapper key, long start, long stop);
 
+	/**
+	 * 原子地向Hash写入一个或多个字段，不存在时自动创建Hash。
+	 *
+	 * @param key    Hash的key
+	 * @param fields 需要写入的字段和值
+	 * @return 本次新增的字段数量，覆盖已有字段不计数
+	 * @throws WrongTypeException key存在但不是Hash时抛出
+	 */
+	long hashSet(BytesWrapper key, Map<BytesWrapper, BytesWrapper> fields);
+
+	/**
+	 * 原子地读取Hash中的指定字段。
+	 *
+	 * @param key   Hash的key
+	 * @param field 需要读取的字段
+	 * @return 字段值；key或field不存在时返回null
+	 * @throws WrongTypeException key存在但不是Hash时抛出
+	 */
+	BytesWrapper hashGet(BytesWrapper key, BytesWrapper field);
+
+	/**
+	 * 原子地删除Hash中的一个或多个字段。
+	 *
+	 * @param key    Hash的key
+	 * @param fields 需要删除的字段
+	 * @return 实际删除的字段数量
+	 * @throws WrongTypeException key存在但不是Hash时抛出
+	 */
+	long hashDelete(BytesWrapper key, List<BytesWrapper> fields);
+
+	/**
+	 * 原子地获取Hash包含的字段数量。
+	 *
+	 * @param key Hash的key
+	 * @return 字段数量；key不存在时返回0
+	 * @throws WrongTypeException key存在但不是Hash时抛出
+	 */
+	long hashLength(BytesWrapper key);
 
 
 }

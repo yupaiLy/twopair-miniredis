@@ -3,13 +3,16 @@ package cn.twopair.core.impl;
 import cn.twopair.core.RedisCore;
 import cn.twopair.core.WrongTypeException;
 import cn.twopair.datatype.BytesWrapper;
+import cn.twopair.datatype.RedisHash;
 import cn.twopair.datatype.RedisList;
 import cn.twopair.datatype.RedisString;
 import org.junit.Assert;
 import org.junit.Test;
 
 import java.nio.charset.StandardCharsets;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
@@ -450,6 +453,153 @@ public class RedisCoreImplTest {
 		Assert.assertNull(redisCore.get(expiredKey));
 	}
 
+	/**
+	 * 验证HSET核心操作能够原子创建Hash、覆盖字段、检查类型并替换过期数据。
+	 */
+	@Test
+	public void testHashSet() {
+		AtomicLong currentTime = new AtomicLong(1000L);
+		RedisCore redisCore = new RedisCoreImpl(currentTime::get);
+		BytesWrapper key = bytes("user:1");
+		Map<BytesWrapper, BytesWrapper> initialFields = new LinkedHashMap<>();
+		initialFields.put(bytes("name"), bytes("twopair"));
+		initialFields.put(bytes("city"), bytes("杭州"));
+
+		Assert.assertEquals(2L, redisCore.hashSet(key, initialFields));
+		Assert.assertEquals(0L, redisCore.hashSet(key, Map.of(bytes("name"), bytes("老板"))));
+		Assert.assertEquals(1L, redisCore.hashSet(key, Map.of(bytes("age"), bytes("18"))));
+
+		RedisHash redisHash = (RedisHash) redisCore.get(key);
+		Assert.assertEquals("老板", redisHash.get(bytes("name")).toUtf8String());
+		Assert.assertEquals("杭州", redisHash.get(bytes("city")).toUtf8String());
+		Assert.assertEquals("18", redisHash.get(bytes("age")).toUtf8String());
+		Assert.assertEquals(3L, redisHash.size());
+
+		BytesWrapper stringKey = bytes("string-key");
+		redisCore.put(stringKey, new RedisString(bytes("value")));
+		try {
+			redisCore.hashSet(stringKey, Map.of(bytes("field"), bytes("value")));
+			Assert.fail("对String执行HSET时应抛出WrongTypeException");
+		} catch (WrongTypeException e) {
+			Assert.assertEquals("WRONGTYPE Operation against a key holding the wrong kind of value", e.getMessage());
+		}
+
+		BytesWrapper expiredKey = bytes("expired-hash");
+		RedisHash expiredHash = new RedisHash();
+		expiredHash.set(Map.of(bytes("old"), bytes("value")));
+		expiredHash.setTimeout(1000L);
+		redisCore.put(expiredKey, expiredHash);
+
+		Assert.assertEquals(1L, redisCore.hashSet(expiredKey, Map.of(bytes("new"), bytes("value"))));
+		RedisHash newHash = (RedisHash) redisCore.get(expiredKey);
+		Assert.assertNotSame(expiredHash, newHash);
+		Assert.assertEquals(-1L, newHash.timeout());
+		Assert.assertNull(newHash.get(bytes("old")));
+		Assert.assertEquals("value", newHash.get(bytes("new")).toUtf8String());
+	}
+
+	/**
+	 * 验证HGET核心操作能够读取字段，并正确处理不存在、过期和类型错误。
+	 */
+	@Test
+	public void testHashGet() {
+		AtomicLong currentTime = new AtomicLong(1000L);
+		RedisCore redisCore = new RedisCoreImpl(currentTime::get);
+		BytesWrapper key = bytes("user:1");
+
+		Assert.assertNull(redisCore.hashGet(key, bytes("name")));
+
+		redisCore.hashSet(key, Map.of(bytes("name"), bytes("老板")));
+		Assert.assertEquals("老板", redisCore.hashGet(key, bytes("name")).toUtf8String());
+		Assert.assertNull(redisCore.hashGet(key, bytes("missing")));
+
+		BytesWrapper stringKey = bytes("string-key");
+		redisCore.put(stringKey, new RedisString(bytes("value")));
+		try {
+			redisCore.hashGet(stringKey, bytes("field"));
+			Assert.fail("对String执行HGET时应抛出WrongTypeException");
+		} catch (WrongTypeException e) {
+			Assert.assertEquals("WRONGTYPE Operation against a key holding the wrong kind of value", e.getMessage());
+		}
+
+		BytesWrapper expiredKey = bytes("expired-hash");
+		RedisHash expiredHash = new RedisHash();
+		expiredHash.set(Map.of(bytes("name"), bytes("old")));
+		expiredHash.setTimeout(1000L);
+		redisCore.put(expiredKey, expiredHash);
+
+		Assert.assertNull(redisCore.hashGet(expiredKey, bytes("name")));
+		Assert.assertNull(redisCore.get(expiredKey));
+	}
+
+	/**
+	 * 验证HDEL核心操作能够批量删除字段，并正确处理空Hash、过期和类型错误。
+	 */
+	@Test
+	public void testHashDelete() {
+		AtomicLong currentTime = new AtomicLong(1000L);
+		RedisCore redisCore = new RedisCoreImpl(currentTime::get);
+		BytesWrapper key = bytes("user:1");
+
+		Assert.assertEquals(0L, redisCore.hashDelete(key, List.of(bytes("name"))));
+
+		redisCore.hashSet(key, Map.of(bytes("name"), bytes("老板"), bytes("city"), bytes("杭州")));
+		Assert.assertEquals(1L, redisCore.hashDelete(key, List.of(bytes("city"), bytes("missing"), bytes("city"))));
+		Assert.assertNotNull(redisCore.get(key));
+		Assert.assertEquals(1L, redisCore.hashDelete(key, List.of(bytes("name"))));
+		Assert.assertNull(redisCore.get(key));
+
+		BytesWrapper stringKey = bytes("string-key");
+		redisCore.put(stringKey, new RedisString(bytes("value")));
+		try {
+			redisCore.hashDelete(stringKey, List.of(bytes("field")));
+			Assert.fail("对String执行HDEL时应抛出WrongTypeException");
+		} catch (WrongTypeException e) {
+			Assert.assertEquals("WRONGTYPE Operation against a key holding the wrong kind of value", e.getMessage());
+		}
+
+		BytesWrapper expiredKey = bytes("expired-hash");
+		RedisHash expiredHash = new RedisHash();
+		expiredHash.set(Map.of(bytes("name"), bytes("old")));
+		expiredHash.setTimeout(1000L);
+		redisCore.put(expiredKey, expiredHash);
+
+		Assert.assertEquals(0L, redisCore.hashDelete(expiredKey, List.of(bytes("name"))));
+		Assert.assertNull(redisCore.get(expiredKey));
+	}
+
+	/**
+	 * 验证HLEN核心操作能够读取字段数量，并正确处理不存在、过期和类型错误。
+	 */
+	@Test
+	public void testHashLength() {
+		AtomicLong currentTime = new AtomicLong(1000L);
+		RedisCore redisCore = new RedisCoreImpl(currentTime::get);
+		BytesWrapper key = bytes("user:1");
+
+		Assert.assertEquals(0L, redisCore.hashLength(key));
+
+		redisCore.hashSet(key, Map.of(bytes("name"), bytes("老板"), bytes("city"), bytes("杭州")));
+		Assert.assertEquals(2L, redisCore.hashLength(key));
+
+		BytesWrapper stringKey = bytes("string-key");
+		redisCore.put(stringKey, new RedisString(bytes("value")));
+		try {
+			redisCore.hashLength(stringKey);
+			Assert.fail("对String执行HLEN时应抛出WrongTypeException");
+		} catch (WrongTypeException e) {
+			Assert.assertEquals("WRONGTYPE Operation against a key holding the wrong kind of value", e.getMessage());
+		}
+
+		BytesWrapper expiredKey = bytes("expired-hash");
+		RedisHash expiredHash = new RedisHash();
+		expiredHash.set(Map.of(bytes("name"), bytes("old")));
+		expiredHash.setTimeout(1000L);
+		redisCore.put(expiredKey, expiredHash);
+
+		Assert.assertEquals(0L, redisCore.hashLength(expiredKey));
+		Assert.assertNull(redisCore.get(expiredKey));
+	}
 
 	/**
 	 * 将字符串转换成UTF-8字节包装器。

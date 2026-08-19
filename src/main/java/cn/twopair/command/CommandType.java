@@ -20,5 +20,9 @@ public enum CommandType {
 	RPOP,
 	LLEN,
 	LRANGE,
+	HSET,
+	HGET,
+	HDEL,
+	HLEN,
 
 }

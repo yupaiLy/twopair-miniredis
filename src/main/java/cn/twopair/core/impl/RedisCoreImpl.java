@@ -4,6 +4,7 @@ import cn.twopair.core.RedisCore;
 import cn.twopair.core.WrongTypeException;
 import cn.twopair.datatype.BytesWrapper;
 import cn.twopair.datatype.RedisData;
+import cn.twopair.datatype.RedisHash;
 import cn.twopair.datatype.RedisList;
 
 import java.util.List;
@@ -339,6 +340,128 @@ public class RedisCoreImpl implements RedisCore {
 		return result.get();
 	}
 
+	@Override
+	public long hashSet(BytesWrapper key, Map<BytesWrapper, BytesWrapper> fields) {
+		Objects.requireNonNull(key, "Hash的key不能为空");
+		Objects.requireNonNull(fields, "Hash字段不能为空");
+
+		if (fields.isEmpty()) {
+			throw new IllegalArgumentException("Hash字段不能为空");
+		}
+
+		AtomicLong addedCount = new AtomicLong();
+
+		map.compute(key, (currentKey, currentValue) -> {
+			long now = currentTimeMillis.getAsLong();
+
+			// 已过期的数据在逻辑上等同于不存在。
+			if (currentValue != null
+					&& currentValue.timeout() != -1L
+					&& currentValue.timeout() <= now) {
+				currentValue = null;
+			}
+
+			RedisHash redisHash;
+
+			if (currentValue == null) {
+				redisHash = new RedisHash();
+			} else if (currentValue instanceof RedisHash hash) {
+				redisHash = hash;
+			} else {
+				throw new WrongTypeException();
+			}
+
+			addedCount.set(redisHash.set(fields));
+			return redisHash;
+		});
+
+		return addedCount.get();
+	}
+
+	@Override
+	public BytesWrapper hashGet(BytesWrapper key, BytesWrapper field) {
+		Objects.requireNonNull(key, "Hash的key不能为空");
+		Objects.requireNonNull(field, "Hash的field不能为空");
+		AtomicReference<BytesWrapper> result = new AtomicReference<>();
+
+		map.computeIfPresent(key, (currentKey, currentValue) -> {
+			long now = currentTimeMillis.getAsLong();
+
+			// 已过期的数据直接删除，并按照不存在处理。
+			if (currentValue.timeout() != -1L && currentValue.timeout() <= now) {
+				return null;
+			}
+
+			if (!(currentValue instanceof RedisHash redisHash)) {
+				throw new WrongTypeException();
+			}
+
+			result.set(redisHash.get(field));
+			return redisHash;
+		});
+
+		return result.get();
+	}
+
+	@Override
+	public long hashDelete(BytesWrapper key, List<BytesWrapper> fields) {
+		Objects.requireNonNull(key, "Hash的key不能为空");
+		Objects.requireNonNull(fields, "Hash字段不能为空");
+
+		if (fields.isEmpty()) {
+			throw new IllegalArgumentException("Hash字段不能为空");
+		}
+
+		AtomicLong deletedCount = new AtomicLong();
+
+		map.computeIfPresent(key, (currentKey, currentValue) -> {
+			long now = currentTimeMillis.getAsLong();
+
+			// 已过期的数据直接删除，并按照不存在处理。
+			if (currentValue.timeout() != -1L && currentValue.timeout() <= now) {
+				return null;
+			}
+
+			if (!(currentValue instanceof RedisHash redisHash)) {
+				throw new WrongTypeException();
+			}
+
+			deletedCount.set(redisHash.delete(fields));
+
+			// Redis不保留空Hash，最后一个field删除后移除整个key。
+			if (redisHash.size() == 0L) {
+				return null;
+			}
+
+			return redisHash;
+		});
+
+		return deletedCount.get();
+	}
+
+	@Override
+	public long hashLength(BytesWrapper key) {
+		Objects.requireNonNull(key, "Hash的key不能为空");
+		AtomicLong resultLength = new AtomicLong();
+
+		map.computeIfPresent(key, (currentKey, currentValue) -> {
+			long now = currentTimeMillis.getAsLong();
+
+			// 已过期的数据直接删除，并按照不存在处理。
+			if (currentValue.timeout() != -1L && currentValue.timeout() <= now) {
+				return null;
+			}
+
+			if (!(currentValue instanceof RedisHash redisHash)) {
+				throw new WrongTypeException();
+			}
+
+			resultLength.set(redisHash.size());
+			return redisHash;
+		});
+
+		return resultLength.get();
+	}
 
 	/**
 	 * Adds the specified key-value pair to the data store while setting an expiration time for the value.
