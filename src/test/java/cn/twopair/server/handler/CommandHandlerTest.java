@@ -1416,4 +1416,58 @@ public class CommandHandlerTest {
 			Files.deleteIfExists(path);
 		}
 	}
+
+	/**
+	 * 验证客户端连接时发送SELECT 0能够成功，非零数据库返回错误且连接保持可用。
+	 */
+	@Test
+	/**
+	 * 验证GUI常用的SCAN 0 MATCH * COUNT请求返回标准游标与key数组。
+	 */
+	@Test
+	public void testHandleScanCompatibility() {
+		RedisCore redisCore = new RedisCoreImpl();
+		EmbeddedChannel channel = new EmbeddedChannel(new RespEncoder(), new CommandHandler(redisCore));
+
+		try {
+			channel.writeInbound(command("SET", "alpha", "one"));
+			Assert.assertEquals("+OK\r\n", readOutboundAsString(channel));
+
+			channel.writeInbound(command("SET", "beta", "two"));
+			Assert.assertEquals("+OK\r\n", readOutboundAsString(channel));
+
+			channel.writeInbound(command("SCAN", "0", "MATCH", "*", "COUNT", "100"));
+			Assert.assertEquals("*2\r\n$1\r\n0\r\n*2\r\n$5\r\nalpha\r\n$4\r\nbeta\r\n", readOutboundAsString(channel));
+			Assert.assertTrue(channel.isOpen());
+		} finally {
+			channel.finishAndReleaseAll();
+		}
+	}
+
+	@Test
+	/**
+	 * 验证GUI读取Hash和Set内容时使用的HSCAN、SSCAN协议结构。
+	 */
+	@Test
+	public void testHandleHashAndSetScanCompatibility() {
+		RedisCore redisCore = new RedisCoreImpl();
+		EmbeddedChannel channel = new EmbeddedChannel(new RespEncoder(), new CommandHandler(redisCore));
+
+		try {
+			channel.writeInbound(command("HSET", "user", "name", "twopair", "age", "18"));
+			Assert.assertEquals(":2\r\n", readOutboundAsString(channel));
+
+			channel.writeInbound(command("HSCAN", "user", "0", "MATCH", "*", "COUNT", "100"));
+			Assert.assertEquals("*2\r\n$1\r\n0\r\n*4\r\n$3\r\nage\r\n$2\r\n18\r\n$4\r\nname\r\n$7\r\ntwopair\r\n", readOutboundAsString(channel));
+
+			channel.writeInbound(command("SADD", "tags", "redis", "java"));
+			Assert.assertEquals(":2\r\n", readOutboundAsString(channel));
+
+			channel.writeInbound(command("SSCAN", "tags", "0", "MATCH", "*", "COUNT", "100"));
+			Assert.assertEquals("*2\r\n$1\r\n0\r\n*2\r\n$4\r\njava\r\n$5\r\nredis\r\n", readOutboundAsString(channel));
+			Assert.assertTrue(channel.isOpen());
+		} finally {
+			channel.finishAndReleaseAll();
+		}
+	}
 }

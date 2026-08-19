@@ -1,5 +1,6 @@
 package cn.twopair.datatype;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -94,6 +95,22 @@ public class RedisHash implements RedisData {
 	 */
 	public synchronized long size() {
 		return values.size();
+	}
+
+	/**
+	 * 获取Hash字段和值的有序快照。
+	 *
+	 * @return 按field字节顺序排列的不可变键值项列表
+	 */
+	public synchronized List<Map.Entry<BytesWrapper, BytesWrapper>> entriesSnapshot() {
+		List<Map.Entry<BytesWrapper, BytesWrapper>> entries = new ArrayList<>(values.size());
+
+		for (Map.Entry<BytesWrapper, BytesWrapper> entry : values.entrySet()) {
+			entries.add(Map.entry(entry.getKey(), entry.getValue()));
+		}
+
+		entries.sort(Map.Entry.comparingByKey());
+		return entries;
 	}
 
 	@Override

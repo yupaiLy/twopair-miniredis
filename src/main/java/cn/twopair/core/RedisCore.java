@@ -19,6 +19,7 @@ public interface RedisCore {
 
 	boolean exist(BytesWrapper key);
 
+
 	/**
 	 * @author ljj
 	 * @description 为指定 key 设置以秒为单位的过期时间。
@@ -138,6 +139,15 @@ public interface RedisCore {
 	long getHashSize(BytesWrapper key);
 
 	/**
+	 * 获取Hash字段和值的有序快照。
+	 *
+	 * @param key Hash的key
+	 * @return key不存在时返回空列表
+	 * @throws WrongTypeException key存在但不是Hash时抛出
+	 */
+	List<Map.Entry<BytesWrapper, BytesWrapper>> scanHashEntries(BytesWrapper key);
+
+	/**
 	 * 原子地向Set添加一个或多个成员，不存在时自动创建Set。
 	 *
 	 * @param key     Set的key
@@ -175,4 +185,20 @@ public interface RedisCore {
 	 * @throws WrongTypeException key存在但不是Set时抛出
 	 */
 	long getSetSize(BytesWrapper key);
+
+	/**
+	 * 获取Set成员的有序快照。
+	 *
+	 * @param key Set的key
+	 * @return key不存在时返回空列表
+	 * @throws WrongTypeException key存在但不是Set时抛出
+	 */
+	List<BytesWrapper> scanSetMembers(BytesWrapper key);
+
+	/**
+	 * 获取当前所有未过期key的弱一致性快照。
+	 *
+	 * @return 当前可见的key列表
+	 */
+	List<BytesWrapper> scanKeys();
 }

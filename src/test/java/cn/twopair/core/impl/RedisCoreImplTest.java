@@ -748,6 +748,33 @@ public class RedisCoreImplTest {
 	}
 
 	/**
+	 * 验证SCAN核心操作返回有效key的弱一致性快照，并清理已经过期的key。
+	 */
+	@Test
+	public void testScanKeys() {
+		AtomicLong currentTime = new AtomicLong(1000L);
+		RedisCore redisCore = new RedisCoreImpl(currentTime::get);
+		redisCore.put(bytes("name"), new RedisString(bytes("twopair")));
+		redisCore.addSetMembers(bytes("tags"), List.of(bytes("java")));
+
+		RedisString expiredValue = new RedisString(bytes("old"));
+		expiredValue.setTimeout(1000L);
+		redisCore.put(bytes("expired"), expiredValue);
+
+		List<BytesWrapper> keys = redisCore.scanKeys();
+
+		Assert.assertEquals(2, keys.size());
+		Assert.assertTrue(keys.contains(bytes("name")));
+		Assert.assertTrue(keys.contains(bytes("tags")));
+		Assert.assertFalse(keys.contains(bytes("expired")));
+		Assert.assertNull(redisCore.get(bytes("expired")));
+	}
+
+	/**
+	 * 验证DEL只计数存在的key，已过期的数据等同于不存在并被顺手清理。
+	 */
+	@Test
+	/**
 	 * 将字符串转换成UTF-8字节包装器。
 	 *
 	 * @param value 字符串内容

@@ -1,5 +1,6 @@
 package cn.twopair.datatype;
 
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
@@ -91,6 +92,17 @@ public class RedisSet implements RedisData {
 	 */
 	public synchronized long size() {
 		return values.size();
+	}
+
+	/**
+	 * 获取Set成员的有序快照。
+	 *
+	 * @return 按成员字节顺序排列的列表
+	 */
+	public synchronized List<BytesWrapper> membersSnapshot() {
+		List<BytesWrapper> members = new ArrayList<>(values);
+		members.sort(BytesWrapper::compareTo);
+		return members;
 	}
 
 	@Override

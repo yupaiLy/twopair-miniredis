@@ -8,6 +8,7 @@ package cn.twopair.command;
  */
 public enum CommandType {
 	PING,
+	SCAN,
 	SET,
 	SETEX,
 	GET,
@@ -24,9 +25,11 @@ public enum CommandType {
 	HGET,
 	HDEL,
 	HLEN,
+	HSCAN,
 	SADD,
 	SREM,
 	SISMEMBER,
 	SCARD,
+	SSCAN,
 
 }

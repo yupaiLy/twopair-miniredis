@@ -1,12 +1,10 @@
 package cn.twopair.command;
 
-import cn.twopair.command.impl.Expire;
-import cn.twopair.command.impl.PExpireAt;
-import cn.twopair.command.impl.Ping;
-import cn.twopair.command.impl.Ttl;
+import cn.twopair.command.impl.*;
 import cn.twopair.command.impl.hash.HDel;
 import cn.twopair.command.impl.hash.HGet;
 import cn.twopair.command.impl.hash.HLen;
+import cn.twopair.command.impl.hash.HScan;
 import cn.twopair.command.impl.hash.HSet;
 import cn.twopair.command.impl.list.LLen;
 import cn.twopair.command.impl.list.LPop;
@@ -16,6 +14,7 @@ import cn.twopair.command.impl.set.SAdd;
 import cn.twopair.command.impl.set.SCard;
 import cn.twopair.command.impl.set.SIsMember;
 import cn.twopair.command.impl.set.SRem;
+import cn.twopair.command.impl.set.SScan;
 import cn.twopair.command.impl.string.Get;
 import cn.twopair.command.impl.string.Set;
 import cn.twopair.command.impl.string.SetEx;
@@ -71,10 +70,13 @@ public class CommandFactory {
 		COMMAND_MAP.put("HGET", HGet::new);
 		COMMAND_MAP.put("HDEL", HDel::new);
 		COMMAND_MAP.put("HLEN", HLen::new);
+		COMMAND_MAP.put("HSCAN", HScan::new);
 		COMMAND_MAP.put("SADD", SAdd::new);
 		COMMAND_MAP.put("SREM", SRem::new);
 		COMMAND_MAP.put("SISMEMBER", SIsMember::new);
 		COMMAND_MAP.put("SCARD", SCard::new);
+		COMMAND_MAP.put("SSCAN", SScan::new);
+		COMMAND_MAP.put("SCAN", Scan::new);
 	}
 
 	private CommandFactory() {

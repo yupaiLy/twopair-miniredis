@@ -4,6 +4,8 @@ import cn.twopair.core.RedisCore;
 import cn.twopair.core.WrongTypeException;
 import cn.twopair.datatype.*;
 
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -12,6 +14,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.LongSupplier;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * @author ljj
@@ -20,6 +24,7 @@ import java.util.function.LongSupplier;
  * @twopair
  */
 public class RedisCoreImpl implements RedisCore {
+	private static final Logger LOGGER = LoggerFactory.getLogger(RedisCoreImpl.class);
 	private final ConcurrentHashMap<BytesWrapper, RedisData> map = new ConcurrentHashMap<>();
 	/**
 	 * 提供当前毫秒时间。
@@ -96,6 +101,8 @@ public class RedisCoreImpl implements RedisCore {
 	public boolean exist(BytesWrapper key) {
 		// 直接调用获取方法
 		return get(key) != null;
+	}
+
 	}
 
 	/**
@@ -461,6 +468,29 @@ public class RedisCoreImpl implements RedisCore {
 	}
 
 	@Override
+	public List<Map.Entry<BytesWrapper, BytesWrapper>> scanHashEntries(BytesWrapper key) {
+		Objects.requireNonNull(key, "Hash的key不能为空");
+		AtomicReference<List<Map.Entry<BytesWrapper, BytesWrapper>>> result = new AtomicReference<>(List.of());
+
+		map.computeIfPresent(key, (currentKey, currentValue) -> {
+			long now = currentTimeMillis.getAsLong();
+
+			if (currentValue.timeout() != -1L && currentValue.timeout() <= now) {
+				return null;
+			}
+
+			if (!(currentValue instanceof RedisHash redisHash)) {
+				throw new WrongTypeException();
+			}
+
+			result.set(redisHash.entriesSnapshot());
+			return redisHash;
+		});
+
+		return result.get();
+	}
+
+	@Override
 	public long addSetMembers(BytesWrapper key, List<BytesWrapper> members) {
 		Objects.requireNonNull(key, "Set的key不能为空");
 		Objects.requireNonNull(members, "Set成员不能为空");
@@ -581,6 +611,52 @@ public class RedisCoreImpl implements RedisCore {
 		});
 
 		return resultSize.get();
+	}
+
+	@Override
+	public List<BytesWrapper> scanSetMembers(BytesWrapper key) {
+		Objects.requireNonNull(key, "Set的key不能为空");
+		AtomicReference<List<BytesWrapper>> result = new AtomicReference<>(List.of());
+
+		map.computeIfPresent(key, (currentKey, currentValue) -> {
+			long now = currentTimeMillis.getAsLong();
+
+			if (currentValue.timeout() != -1L && currentValue.timeout() <= now) {
+				return null;
+			}
+
+			if (!(currentValue instanceof RedisSet redisSet)) {
+				throw new WrongTypeException();
+			}
+
+			result.set(redisSet.membersSnapshot());
+			return redisSet;
+		});
+
+		return result.get();
+	}
+
+	@Override
+	public List<BytesWrapper> scanKeys() {
+		long now = currentTimeMillis.getAsLong();
+		List<BytesWrapper> keys = new ArrayList<>();
+
+		for (Map.Entry<BytesWrapper, RedisData> entry : map.entrySet()) {
+			RedisData redisData = entry.getValue();
+			long timeout = redisData.timeout();
+
+			if (timeout != -1L && timeout <= now) {
+				// 条件删除可以防止并发写入的新值被当前扫描误删。
+				map.remove(entry.getKey(), redisData);
+				continue;
+			}
+
+			keys.add(entry.getKey());
+		}
+
+		// 固定顺序便于游标分页，也让测试和GUI展示结果保持稳定。
+		keys.sort((left, right) -> Arrays.compareUnsigned(left.getByteArray(), right.getByteArray()));
+		return keys;
 	}
 
 	/**

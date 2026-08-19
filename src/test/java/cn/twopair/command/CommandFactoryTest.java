@@ -2,10 +2,12 @@ package cn.twopair.command;
 
 import cn.twopair.command.impl.Expire;
 import cn.twopair.command.impl.Ping;
+import cn.twopair.command.impl.Scan;
 import cn.twopair.command.impl.Ttl;
 import cn.twopair.command.impl.hash.HDel;
 import cn.twopair.command.impl.hash.HGet;
 import cn.twopair.command.impl.hash.HLen;
+import cn.twopair.command.impl.hash.HScan;
 import cn.twopair.command.impl.hash.HSet;
 import cn.twopair.command.impl.list.LLen;
 import cn.twopair.command.impl.list.LPop;
@@ -15,6 +17,7 @@ import cn.twopair.command.impl.set.SAdd;
 import cn.twopair.command.impl.set.SCard;
 import cn.twopair.command.impl.set.SIsMember;
 import cn.twopair.command.impl.set.SRem;
+import cn.twopair.command.impl.set.SScan;
 import cn.twopair.command.impl.string.Get;
 import cn.twopair.command.impl.string.Set;
 import cn.twopair.command.impl.string.SetEx;
@@ -307,6 +310,72 @@ public class CommandFactoryTest {
 		Assert.assertEquals(CommandType.SCARD, command.type());
 	}
 
+	/**
+	 * 验证命令工厂能够根据小写SELECT 0请求创建兼容命令。
+	 */
+	@Test
+	/**
+	 * 验证命令工厂能够创建带MATCH和COUNT选项的SCAN命令。
+	 */
+	@Test
+	public void testCreateScan() {
+		RespArray array = new RespArray(new Resp[]{
+				new BulkString(new BytesWrapper("scan".getBytes(StandardCharsets.UTF_8))),
+				new BulkString(new BytesWrapper("0".getBytes(StandardCharsets.UTF_8))),
+				new BulkString(new BytesWrapper("MATCH".getBytes(StandardCharsets.UTF_8))),
+				new BulkString(new BytesWrapper("*".getBytes(StandardCharsets.UTF_8))),
+				new BulkString(new BytesWrapper("COUNT".getBytes(StandardCharsets.UTF_8))),
+				new BulkString(new BytesWrapper("100".getBytes(StandardCharsets.UTF_8)))
+		});
+
+		Command command = CommandFactory.from(array);
+
+		Assert.assertTrue(command instanceof Scan);
+		Assert.assertEquals(CommandType.SCAN, command.type());
+	}
+
+	/**
+	 * 验证命令工厂能够根据小写TYPE请求创建命令。
+	 */
+	@Test
+	/**
+	 * 验证命令工厂能够创建HSCAN命令。
+	 */
+	@Test
+	public void testCreateHScan() {
+		RespArray array = new RespArray(new Resp[]{
+				new BulkString(new BytesWrapper("hscan".getBytes(StandardCharsets.UTF_8))),
+				new BulkString(new BytesWrapper("user".getBytes(StandardCharsets.UTF_8))),
+				new BulkString(new BytesWrapper("0".getBytes(StandardCharsets.UTF_8)))
+		});
+
+		Command command = CommandFactory.from(array);
+
+		Assert.assertTrue(command instanceof HScan);
+		Assert.assertEquals(CommandType.HSCAN, command.type());
+	}
+
+	/**
+	 * 验证命令工厂能够创建SSCAN命令。
+	 */
+	@Test
+	public void testCreateSScan() {
+		RespArray array = new RespArray(new Resp[]{
+				new BulkString(new BytesWrapper("sscan".getBytes(StandardCharsets.UTF_8))),
+				new BulkString(new BytesWrapper("tags".getBytes(StandardCharsets.UTF_8))),
+				new BulkString(new BytesWrapper("0".getBytes(StandardCharsets.UTF_8)))
+		});
+
+		Command command = CommandFactory.from(array);
+
+		Assert.assertTrue(command instanceof SScan);
+		Assert.assertEquals(CommandType.SSCAN, command.type());
+	}
+
+	/**
+	 * 验证命令工厂能够根据小写DEL请求创建对应命令。
+	 */
+	@Test
 
 	@Test
 	public void testUnsupportedCommand() {
