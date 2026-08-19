@@ -644,6 +644,110 @@ public class RedisCoreImplTest {
 	}
 
 	/**
+	 * 验证SREM核心操作能够批量删除成员，并正确处理空Set、过期和类型错误。
+	 */
+	@Test
+	public void testRemoveSetMembers() {
+		AtomicLong currentTime = new AtomicLong(1000L);
+		RedisCore redisCore = new RedisCoreImpl(currentTime::get);
+		BytesWrapper key = bytes("tags");
+
+		Assert.assertEquals(0L, redisCore.removeSetMembers(key, List.of(bytes("java"))));
+
+		redisCore.addSetMembers(key, List.of(bytes("java"), bytes("redis"), bytes("中文")));
+		Assert.assertEquals(1L, redisCore.removeSetMembers(key, List.of(bytes("redis"), bytes("missing"), bytes("redis"))));
+		Assert.assertNotNull(redisCore.get(key));
+		Assert.assertEquals(2L, redisCore.removeSetMembers(key, List.of(bytes("java"), bytes("中文"))));
+		Assert.assertNull(redisCore.get(key));
+
+		BytesWrapper stringKey = bytes("string-key");
+		redisCore.put(stringKey, new RedisString(bytes("value")));
+		try {
+			redisCore.removeSetMembers(stringKey, List.of(bytes("member")));
+			Assert.fail("对String执行SREM时应抛出WrongTypeException");
+		} catch (WrongTypeException e) {
+			Assert.assertEquals("WRONGTYPE Operation against a key holding the wrong kind of value", e.getMessage());
+		}
+
+		BytesWrapper expiredKey = bytes("expired-set");
+		RedisSet expiredSet = new RedisSet();
+		expiredSet.add(List.of(bytes("old")));
+		expiredSet.setTimeout(1000L);
+		redisCore.put(expiredKey, expiredSet);
+
+		Assert.assertEquals(0L, redisCore.removeSetMembers(expiredKey, List.of(bytes("old"))));
+		Assert.assertNull(redisCore.get(expiredKey));
+	}
+
+	/**
+	 * 验证SISMEMBER核心操作能够判断成员存在性，并正确处理不存在、过期和类型错误。
+	 */
+	@Test
+	public void testContainsSetMember() {
+		AtomicLong currentTime = new AtomicLong(1000L);
+		RedisCore redisCore = new RedisCoreImpl(currentTime::get);
+		BytesWrapper key = bytes("tags");
+
+		Assert.assertFalse(redisCore.containsSetMember(key, bytes("java")));
+
+		redisCore.addSetMembers(key, List.of(bytes("java"), bytes("中文")));
+		Assert.assertTrue(redisCore.containsSetMember(key, bytes("java")));
+		Assert.assertTrue(redisCore.containsSetMember(key, bytes("中文")));
+		Assert.assertFalse(redisCore.containsSetMember(key, bytes("missing")));
+
+		BytesWrapper stringKey = bytes("string-key");
+		redisCore.put(stringKey, new RedisString(bytes("value")));
+		try {
+			redisCore.containsSetMember(stringKey, bytes("member"));
+			Assert.fail("对String执行SISMEMBER时应抛出WrongTypeException");
+		} catch (WrongTypeException e) {
+			Assert.assertEquals("WRONGTYPE Operation against a key holding the wrong kind of value", e.getMessage());
+		}
+
+		BytesWrapper expiredKey = bytes("expired-set");
+		RedisSet expiredSet = new RedisSet();
+		expiredSet.add(List.of(bytes("old")));
+		expiredSet.setTimeout(1000L);
+		redisCore.put(expiredKey, expiredSet);
+
+		Assert.assertFalse(redisCore.containsSetMember(expiredKey, bytes("old")));
+		Assert.assertNull(redisCore.get(expiredKey));
+	}
+
+	/**
+	 * 验证SCARD核心操作能够读取成员数量，并正确处理不存在、过期和类型错误。
+	 */
+	@Test
+	public void testGetSetSize() {
+		AtomicLong currentTime = new AtomicLong(1000L);
+		RedisCore redisCore = new RedisCoreImpl(currentTime::get);
+		BytesWrapper key = bytes("tags");
+
+		Assert.assertEquals(0L, redisCore.getSetSize(key));
+
+		redisCore.addSetMembers(key, List.of(bytes("java"), bytes("redis"), bytes("中文"), bytes("java")));
+		Assert.assertEquals(3L, redisCore.getSetSize(key));
+
+		BytesWrapper stringKey = bytes("string-key");
+		redisCore.put(stringKey, new RedisString(bytes("value")));
+		try {
+			redisCore.getSetSize(stringKey);
+			Assert.fail("对String执行SCARD时应抛出WrongTypeException");
+		} catch (WrongTypeException e) {
+			Assert.assertEquals("WRONGTYPE Operation against a key holding the wrong kind of value", e.getMessage());
+		}
+
+		BytesWrapper expiredKey = bytes("expired-set");
+		RedisSet expiredSet = new RedisSet();
+		expiredSet.add(List.of(bytes("old")));
+		expiredSet.setTimeout(1000L);
+		redisCore.put(expiredKey, expiredSet);
+
+		Assert.assertEquals(0L, redisCore.getSetSize(expiredKey));
+		Assert.assertNull(redisCore.get(expiredKey));
+	}
+
+	/**
 	 * 将字符串转换成UTF-8字节包装器。
 	 *
 	 * @param value 字符串内容

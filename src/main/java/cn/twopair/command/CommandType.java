@@ -24,5 +24,9 @@ public enum CommandType {
 	HGET,
 	HDEL,
 	HLEN,
+	SADD,
+	SREM,
+	SISMEMBER,
+	SCARD,
 
 }

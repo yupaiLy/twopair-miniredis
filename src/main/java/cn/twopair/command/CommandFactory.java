@@ -12,6 +12,10 @@ import cn.twopair.command.impl.list.LLen;
 import cn.twopair.command.impl.list.LPop;
 import cn.twopair.command.impl.list.LPush;
 import cn.twopair.command.impl.list.LRange;
+import cn.twopair.command.impl.set.SAdd;
+import cn.twopair.command.impl.set.SCard;
+import cn.twopair.command.impl.set.SIsMember;
+import cn.twopair.command.impl.set.SRem;
 import cn.twopair.command.impl.string.Get;
 import cn.twopair.command.impl.string.Set;
 import cn.twopair.command.impl.string.SetEx;
@@ -67,6 +71,10 @@ public class CommandFactory {
 		COMMAND_MAP.put("HGET", HGet::new);
 		COMMAND_MAP.put("HDEL", HDel::new);
 		COMMAND_MAP.put("HLEN", HLen::new);
+		COMMAND_MAP.put("SADD", SAdd::new);
+		COMMAND_MAP.put("SREM", SRem::new);
+		COMMAND_MAP.put("SISMEMBER", SIsMember::new);
+		COMMAND_MAP.put("SCARD", SCard::new);
 	}
 
 	private CommandFactory() {

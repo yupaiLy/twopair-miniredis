@@ -6,6 +6,7 @@ import cn.twopair.datatype.BytesWrapper;
 import cn.twopair.datatype.RedisData;
 import cn.twopair.datatype.RedisHash;
 import cn.twopair.datatype.RedisList;
+import cn.twopair.datatype.RedisSet;
 import cn.twopair.datatype.RedisString;
 import cn.twopair.persistence.aof.AofFile;
 import cn.twopair.persistence.aof.AofReplay;
@@ -1213,6 +1214,204 @@ public class CommandHandlerTest {
 			RedisCore restoredCore = new RedisCoreImpl();
 			Assert.assertEquals(2, AofReplay.replay(path, restoredCore));
 			Assert.assertEquals(2L, restoredCore.getHashSize(new BytesWrapper("user:1".getBytes(StandardCharsets.UTF_8))));
+		} finally {
+			Files.deleteIfExists(path);
+		}
+	}
+
+	/**
+	 * 验证SADD的新增计数、成员去重、WRONGTYPE错误和AOF重放。
+	 *
+	 * @throws Exception 当临时文件或AOF读写失败时抛出
+	 */
+	@Test
+	public void testHandleSAddWithAof() throws Exception {
+		Path path = Files.createTempFile("twopair-miniredis-sadd-", ".aof");
+
+		try {
+			RedisCore sourceCore = new RedisCoreImpl();
+
+			try (AofFile aofFile = new AofFile(path)) {
+				EmbeddedChannel channel = new EmbeddedChannel(new RespEncoder(), new CommandHandler(sourceCore, aofFile));
+
+				try {
+					channel.writeInbound(command("SADD", "tags", "java", "redis", "中文", "java"));
+					Assert.assertEquals(":3\r\n", readOutboundAsString(channel));
+
+					channel.writeInbound(command("SADD", "tags", "redis", "netty"));
+					Assert.assertEquals(":1\r\n", readOutboundAsString(channel));
+
+					channel.writeInbound(command("SET", "name", "twopair"));
+					Assert.assertEquals("+OK\r\n", readOutboundAsString(channel));
+
+					channel.writeInbound(command("SADD", "name", "should-not-persist"));
+					Assert.assertEquals("-WRONGTYPE Operation against a key holding the wrong kind of value\r\n", readOutboundAsString(channel));
+					Assert.assertTrue(channel.isOpen());
+				} finally {
+					channel.finishAndReleaseAll();
+				}
+			}
+
+			String aofContent = Files.readString(path, StandardCharsets.UTF_8);
+			Assert.assertTrue(aofContent.contains("SADD"));
+			Assert.assertFalse(aofContent.contains("should-not-persist"));
+
+			RedisCore restoredCore = new RedisCoreImpl();
+			Assert.assertEquals(3, AofReplay.replay(path, restoredCore));
+			RedisSet restoredSet = (RedisSet) restoredCore.get(new BytesWrapper("tags".getBytes(StandardCharsets.UTF_8)));
+			Assert.assertTrue(restoredSet.contains(new BytesWrapper("java".getBytes(StandardCharsets.UTF_8))));
+			Assert.assertTrue(restoredSet.contains(new BytesWrapper("中文".getBytes(StandardCharsets.UTF_8))));
+			Assert.assertTrue(restoredSet.contains(new BytesWrapper("netty".getBytes(StandardCharsets.UTF_8))));
+			Assert.assertEquals(4L, restoredSet.size());
+		} finally {
+			Files.deleteIfExists(path);
+		}
+	}
+
+	/**
+	 * 验证SREM的删除计数、空Set删key、WRONGTYPE错误和AOF重放。
+	 *
+	 * @throws Exception 当临时文件或AOF读写失败时抛出
+	 */
+	@Test
+	public void testHandleSRemWithAof() throws Exception {
+		Path path = Files.createTempFile("twopair-miniredis-srem-", ".aof");
+
+		try {
+			RedisCore sourceCore = new RedisCoreImpl();
+
+			try (AofFile aofFile = new AofFile(path)) {
+				EmbeddedChannel channel = new EmbeddedChannel(new RespEncoder(), new CommandHandler(sourceCore, aofFile));
+
+				try {
+					channel.writeInbound(command("SADD", "tags", "java", "redis", "中文"));
+					Assert.assertEquals(":3\r\n", readOutboundAsString(channel));
+
+					channel.writeInbound(command("SREM", "tags", "redis", "missing"));
+					Assert.assertEquals(":1\r\n", readOutboundAsString(channel));
+
+					channel.writeInbound(command("SREM", "tags", "java", "中文"));
+					Assert.assertEquals(":2\r\n", readOutboundAsString(channel));
+
+					channel.writeInbound(command("SREM", "tags", "java"));
+					Assert.assertEquals(":0\r\n", readOutboundAsString(channel));
+
+					channel.writeInbound(command("SET", "name", "twopair"));
+					Assert.assertEquals("+OK\r\n", readOutboundAsString(channel));
+
+					channel.writeInbound(command("SREM", "name", "should-not-persist"));
+					Assert.assertEquals("-WRONGTYPE Operation against a key holding the wrong kind of value\r\n", readOutboundAsString(channel));
+					Assert.assertTrue(channel.isOpen());
+				} finally {
+					channel.finishAndReleaseAll();
+				}
+			}
+
+			String aofContent = Files.readString(path, StandardCharsets.UTF_8);
+			Assert.assertTrue(aofContent.contains("SREM"));
+			Assert.assertFalse(aofContent.contains("should-not-persist"));
+
+			RedisCore restoredCore = new RedisCoreImpl();
+			Assert.assertEquals(5, AofReplay.replay(path, restoredCore));
+			Assert.assertNull(restoredCore.get(new BytesWrapper("tags".getBytes(StandardCharsets.UTF_8))));
+			Assert.assertEquals("twopair", ((RedisString) restoredCore.get(new BytesWrapper("name".getBytes(StandardCharsets.UTF_8)))).getValue().toUtf8String());
+		} finally {
+			Files.deleteIfExists(path);
+		}
+	}
+
+	/**
+	 * 验证SISMEMBER的存在性响应、WRONGTYPE错误，并且不会写入AOF。
+	 *
+	 * @throws Exception 当临时文件或AOF读写失败时抛出
+	 */
+	@Test
+	public void testHandleSIsMemberWithoutAofAppend() throws Exception {
+		Path path = Files.createTempFile("twopair-miniredis-sismember-", ".aof");
+
+		try {
+			RedisCore sourceCore = new RedisCoreImpl();
+
+			try (AofFile aofFile = new AofFile(path)) {
+				EmbeddedChannel channel = new EmbeddedChannel(new RespEncoder(), new CommandHandler(sourceCore, aofFile));
+
+				try {
+					channel.writeInbound(command("SADD", "tags", "java", "中文"));
+					Assert.assertEquals(":2\r\n", readOutboundAsString(channel));
+
+					channel.writeInbound(command("SISMEMBER", "tags", "中文"));
+					Assert.assertEquals(":1\r\n", readOutboundAsString(channel));
+
+					channel.writeInbound(command("SISMEMBER", "tags", "missing"));
+					Assert.assertEquals(":0\r\n", readOutboundAsString(channel));
+
+					channel.writeInbound(command("SISMEMBER", "missing", "java"));
+					Assert.assertEquals(":0\r\n", readOutboundAsString(channel));
+
+					channel.writeInbound(command("SET", "name", "twopair"));
+					Assert.assertEquals("+OK\r\n", readOutboundAsString(channel));
+
+					channel.writeInbound(command("SISMEMBER", "name", "member"));
+					Assert.assertEquals("-WRONGTYPE Operation against a key holding the wrong kind of value\r\n", readOutboundAsString(channel));
+					Assert.assertTrue(channel.isOpen());
+				} finally {
+					channel.finishAndReleaseAll();
+				}
+			}
+
+			String aofContent = Files.readString(path, StandardCharsets.UTF_8);
+			Assert.assertFalse(aofContent.contains("SISMEMBER"));
+
+			RedisCore restoredCore = new RedisCoreImpl();
+			Assert.assertEquals(2, AofReplay.replay(path, restoredCore));
+			Assert.assertTrue(restoredCore.containsSetMember(new BytesWrapper("tags".getBytes(StandardCharsets.UTF_8)), new BytesWrapper("中文".getBytes(StandardCharsets.UTF_8))));
+		} finally {
+			Files.deleteIfExists(path);
+		}
+	}
+
+	/**
+	 * 验证SCARD的成员数量、WRONGTYPE错误，并且不会写入AOF。
+	 *
+	 * @throws Exception 当临时文件或AOF读写失败时抛出
+	 */
+	@Test
+	public void testHandleSCardWithoutAofAppend() throws Exception {
+		Path path = Files.createTempFile("twopair-miniredis-scard-", ".aof");
+
+		try {
+			RedisCore sourceCore = new RedisCoreImpl();
+
+			try (AofFile aofFile = new AofFile(path)) {
+				EmbeddedChannel channel = new EmbeddedChannel(new RespEncoder(), new CommandHandler(sourceCore, aofFile));
+
+				try {
+					channel.writeInbound(command("SADD", "tags", "java", "redis", "中文", "java"));
+					Assert.assertEquals(":3\r\n", readOutboundAsString(channel));
+
+					channel.writeInbound(command("SCARD", "tags"));
+					Assert.assertEquals(":3\r\n", readOutboundAsString(channel));
+
+					channel.writeInbound(command("SCARD", "missing"));
+					Assert.assertEquals(":0\r\n", readOutboundAsString(channel));
+
+					channel.writeInbound(command("SET", "name", "twopair"));
+					Assert.assertEquals("+OK\r\n", readOutboundAsString(channel));
+
+					channel.writeInbound(command("SCARD", "name"));
+					Assert.assertEquals("-WRONGTYPE Operation against a key holding the wrong kind of value\r\n", readOutboundAsString(channel));
+					Assert.assertTrue(channel.isOpen());
+				} finally {
+					channel.finishAndReleaseAll();
+				}
+			}
+
+			String aofContent = Files.readString(path, StandardCharsets.UTF_8);
+			Assert.assertFalse(aofContent.contains("SCARD"));
+
+			RedisCore restoredCore = new RedisCoreImpl();
+			Assert.assertEquals(2, AofReplay.replay(path, restoredCore));
+			Assert.assertEquals(3L, restoredCore.getSetSize(new BytesWrapper("tags".getBytes(StandardCharsets.UTF_8))));
 		} finally {
 			Files.deleteIfExists(path);
 		}

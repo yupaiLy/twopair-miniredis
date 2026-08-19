@@ -11,6 +11,10 @@ import cn.twopair.command.impl.list.LLen;
 import cn.twopair.command.impl.list.LPop;
 import cn.twopair.command.impl.list.LPush;
 import cn.twopair.command.impl.list.LRange;
+import cn.twopair.command.impl.set.SAdd;
+import cn.twopair.command.impl.set.SCard;
+import cn.twopair.command.impl.set.SIsMember;
+import cn.twopair.command.impl.set.SRem;
 import cn.twopair.command.impl.string.Get;
 import cn.twopair.command.impl.string.Set;
 import cn.twopair.command.impl.string.SetEx;
@@ -234,6 +238,73 @@ public class CommandFactoryTest {
 
 		Assert.assertTrue(command instanceof HLen);
 		Assert.assertEquals(CommandType.HLEN, command.type());
+	}
+
+	/**
+	 * 验证命令工厂能够根据小写SADD请求创建对应命令。
+	 */
+	@Test
+	public void testCreateSAdd() {
+		RespArray array = new RespArray(new Resp[]{
+				new BulkString(new BytesWrapper("sadd".getBytes(StandardCharsets.UTF_8))),
+				new BulkString(new BytesWrapper("tags".getBytes(StandardCharsets.UTF_8))),
+				new BulkString(new BytesWrapper("java".getBytes(StandardCharsets.UTF_8)))
+		});
+
+		Command command = CommandFactory.from(array);
+
+		Assert.assertTrue(command instanceof SAdd);
+		Assert.assertEquals(CommandType.SADD, command.type());
+	}
+
+	/**
+	 * 验证命令工厂能够根据小写SREM请求创建对应命令。
+	 */
+	@Test
+	public void testCreateSRem() {
+		RespArray array = new RespArray(new Resp[]{
+				new BulkString(new BytesWrapper("srem".getBytes(StandardCharsets.UTF_8))),
+				new BulkString(new BytesWrapper("tags".getBytes(StandardCharsets.UTF_8))),
+				new BulkString(new BytesWrapper("java".getBytes(StandardCharsets.UTF_8)))
+		});
+
+		Command command = CommandFactory.from(array);
+
+		Assert.assertTrue(command instanceof SRem);
+		Assert.assertEquals(CommandType.SREM, command.type());
+	}
+
+	/**
+	 * 验证命令工厂能够根据小写SISMEMBER请求创建对应命令。
+	 */
+	@Test
+	public void testCreateSIsMember() {
+		RespArray array = new RespArray(new Resp[]{
+				new BulkString(new BytesWrapper("sismember".getBytes(StandardCharsets.UTF_8))),
+				new BulkString(new BytesWrapper("tags".getBytes(StandardCharsets.UTF_8))),
+				new BulkString(new BytesWrapper("java".getBytes(StandardCharsets.UTF_8)))
+		});
+
+		Command command = CommandFactory.from(array);
+
+		Assert.assertTrue(command instanceof SIsMember);
+		Assert.assertEquals(CommandType.SISMEMBER, command.type());
+	}
+
+	/**
+	 * 验证命令工厂能够根据小写SCARD请求创建对应命令。
+	 */
+	@Test
+	public void testCreateSCard() {
+		RespArray array = new RespArray(new Resp[]{
+				new BulkString(new BytesWrapper("scard".getBytes(StandardCharsets.UTF_8))),
+				new BulkString(new BytesWrapper("tags".getBytes(StandardCharsets.UTF_8)))
+		});
+
+		Command command = CommandFactory.from(array);
+
+		Assert.assertTrue(command instanceof SCard);
+		Assert.assertEquals(CommandType.SCARD, command.type());
 	}
 
 

@@ -2,11 +2,7 @@ package cn.twopair.core.impl;
 
 import cn.twopair.core.RedisCore;
 import cn.twopair.core.WrongTypeException;
-import cn.twopair.datatype.BytesWrapper;
-import cn.twopair.datatype.RedisData;
-import cn.twopair.datatype.RedisHash;
-import cn.twopair.datatype.RedisList;
-import cn.twopair.datatype.RedisSet;
+import cn.twopair.datatype.*;
 
 import java.util.List;
 import java.util.Map;
@@ -500,6 +496,91 @@ public class RedisCoreImpl implements RedisCore {
 		});
 
 		return addedCount.get();
+	}
+
+	@Override
+	public long removeSetMembers(BytesWrapper key, List<BytesWrapper> members) {
+		Objects.requireNonNull(key, "Set的key不能为空");
+		Objects.requireNonNull(members, "Set成员不能为空");
+
+		if (members.isEmpty()) {
+			throw new IllegalArgumentException("Set成员不能为空");
+		}
+
+		AtomicLong removedCount = new AtomicLong();
+
+		map.computeIfPresent(key, (currentKey, currentValue) -> {
+			long now = currentTimeMillis.getAsLong();
+
+			// 已过期的数据直接删除，并按照不存在处理。
+			if (currentValue.timeout() != -1L && currentValue.timeout() <= now) {
+				return null;
+			}
+
+			if (!(currentValue instanceof RedisSet redisSet)) {
+				throw new WrongTypeException();
+			}
+
+			removedCount.set(redisSet.remove(members));
+
+			// Redis不保留空Set，最后一个成员删除后移除整个key。
+			if (redisSet.size() == 0L) {
+				return null;
+			}
+
+			return redisSet;
+		});
+
+		return removedCount.get();
+	}
+
+	@Override
+	public boolean containsSetMember(BytesWrapper key, BytesWrapper member) {
+		Objects.requireNonNull(key, "Set的key不能为空");
+		Objects.requireNonNull(member, "Set的member不能为空");
+		AtomicBoolean result = new AtomicBoolean(false);
+
+		map.computeIfPresent(key, (currentKey, currentValue) -> {
+			long now = currentTimeMillis.getAsLong();
+
+			// 已过期的数据直接删除，并按照不存在处理。
+			if (currentValue.timeout() != -1L && currentValue.timeout() <= now) {
+				return null;
+			}
+
+			if (!(currentValue instanceof RedisSet redisSet)) {
+				throw new WrongTypeException();
+			}
+
+			result.set(redisSet.contains(member));
+			return redisSet;
+		});
+
+		return result.get();
+	}
+
+	@Override
+	public long getSetSize(BytesWrapper key) {
+		Objects.requireNonNull(key, "Set的key不能为空");
+		AtomicLong resultSize = new AtomicLong();
+
+		map.computeIfPresent(key, (currentKey, currentValue) -> {
+			long now = currentTimeMillis.getAsLong();
+
+			// 已过期的数据直接删除，并按照不存在处理。
+			if (currentValue.timeout() != -1L && currentValue.timeout() <= now) {
+				return null;
+			}
+
+			if (!(currentValue instanceof RedisSet redisSet)) {
+				throw new WrongTypeException();
+			}
+
+			resultSize.set(redisSet.size());
+			return redisSet;
+		});
+
+		return resultSize.get();
 	}
 
 	/**

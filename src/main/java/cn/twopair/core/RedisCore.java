@@ -147,4 +147,32 @@ public interface RedisCore {
 	 */
 	long addSetMembers(BytesWrapper key, List<BytesWrapper> members);
 
+	/**
+	 * 原子地删除Set中的一个或多个成员。
+	 *
+	 * @param key     Set的key
+	 * @param members 需要删除的成员
+	 * @return 实际删除的成员数量
+	 * @throws WrongTypeException key存在但不是Set时抛出
+	 */
+	long removeSetMembers(BytesWrapper key, List<BytesWrapper> members);
+
+	/**
+	 * 原子地判断Set是否包含指定成员。
+	 *
+	 * @param key    Set的key
+	 * @param member 需要判断的成员
+	 * @return 成员存在时返回true，key或成员不存在时返回false
+	 * @throws WrongTypeException key存在但不是Set时抛出
+	 */
+	boolean containsSetMember(BytesWrapper key, BytesWrapper member);
+
+	/**
+	 * 原子地获取Set包含的唯一成员数量。
+	 *
+	 * @param key Set的key
+	 * @return 成员数量；key不存在时返回0
+	 * @throws WrongTypeException key存在但不是Set时抛出
+	 */
+	long getSetSize(BytesWrapper key);
 }
