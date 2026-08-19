@@ -4,6 +4,7 @@ import cn.twopair.core.RedisCore;
 import cn.twopair.core.impl.RedisCoreImpl;
 import cn.twopair.datatype.BytesWrapper;
 import cn.twopair.datatype.RedisData;
+import cn.twopair.datatype.RedisList;
 import cn.twopair.datatype.RedisString;
 import cn.twopair.persistence.aof.AofFile;
 import cn.twopair.persistence.aof.AofReplay;
@@ -825,4 +826,199 @@ public class CommandHandlerTest {
 			Files.deleteIfExists(path);
 		}
 	}
+
+	/**
+	 * 验证LPUSH网络响应、WRONGTYPE错误和AOF重放形成完整闭环。
+	 *
+	 * @throws Exception 当临时文件或AOF读写失败时抛出
+	 */
+	@Test
+	public void testHandleLPushAndWrongTypeWithAof() throws Exception {
+		Path path = Files.createTempFile("twopair-miniredis-lpush-", ".aof");
+
+		try {
+			RedisCore sourceCore = new RedisCoreImpl();
+
+			try (AofFile aofFile = new AofFile(path)) {
+				EmbeddedChannel channel = new EmbeddedChannel(new RespEncoder(), new CommandHandler(sourceCore, aofFile));
+
+				try {
+					channel.writeInbound(command("LPUSH", "letters", "one", "two", "三"));
+					Assert.assertEquals(":3\r\n", readOutboundAsString(channel));
+
+					channel.writeInbound(command("SET", "name", "twopair"));
+					Assert.assertEquals("+OK\r\n", readOutboundAsString(channel));
+
+					channel.writeInbound(command("LPUSH", "name", "invalid"));
+					Assert.assertEquals(
+							"-WRONGTYPE Operation against a key holding the wrong kind of value\r\n",
+							readOutboundAsString(channel)
+					);
+					Assert.assertTrue(channel.isOpen());
+				} finally {
+					channel.finishAndReleaseAll();
+				}
+			}
+
+			String aofContent = Files.readString(path, StandardCharsets.UTF_8);
+			Assert.assertTrue(aofContent.contains("LPUSH"));
+			Assert.assertFalse(aofContent.contains("invalid"));
+
+			RedisCore restoredCore = new RedisCoreImpl();
+			Assert.assertEquals(2, AofReplay.replay(path, restoredCore));
+			RedisList restoredList = (RedisList) restoredCore.get(new BytesWrapper("letters".getBytes(StandardCharsets.UTF_8)));
+			Assert.assertEquals("三", restoredList.leftPop().toUtf8String());
+			Assert.assertEquals("two", restoredList.leftPop().toUtf8String());
+			Assert.assertEquals("one", restoredList.leftPop().toUtf8String());
+		} finally {
+			Files.deleteIfExists(path);
+		}
+	}
+
+	/**
+	 * 验证LPOP的元素响应、空列表响应、WRONGTYPE错误和AOF重放。
+	 *
+	 * @throws Exception 当临时文件或AOF读写失败时抛出
+	 */
+	@Test
+	public void testHandleLPopWithAof() throws Exception {
+		Path path = Files.createTempFile("twopair-miniredis-lpop-", ".aof");
+
+		try {
+			RedisCore sourceCore = new RedisCoreImpl();
+
+			try (AofFile aofFile = new AofFile(path)) {
+				EmbeddedChannel channel = new EmbeddedChannel(new RespEncoder(), new CommandHandler(sourceCore, aofFile));
+
+				try {
+					channel.writeInbound(command("LPUSH", "letters", "one", "two"));
+					Assert.assertEquals(":2\r\n", readOutboundAsString(channel));
+
+					channel.writeInbound(command("LPOP", "letters"));
+					Assert.assertEquals("$3\r\ntwo\r\n", readOutboundAsString(channel));
+
+					channel.writeInbound(command("LPOP", "letters"));
+					Assert.assertEquals("$3\r\none\r\n", readOutboundAsString(channel));
+
+					channel.writeInbound(command("LPOP", "letters"));
+					Assert.assertEquals("$-1\r\n", readOutboundAsString(channel));
+
+					channel.writeInbound(command("SET", "name", "twopair"));
+					Assert.assertEquals("+OK\r\n", readOutboundAsString(channel));
+
+					channel.writeInbound(command("LPOP", "name"));
+					Assert.assertEquals("-WRONGTYPE Operation against a key holding the wrong kind of value\r\n", readOutboundAsString(channel));
+					Assert.assertTrue(channel.isOpen());
+				} finally {
+					channel.finishAndReleaseAll();
+				}
+			}
+
+			String aofContent = Files.readString(path, StandardCharsets.UTF_8);
+			Assert.assertTrue(aofContent.contains("LPOP"));
+
+			RedisCore restoredCore = new RedisCoreImpl();
+			Assert.assertEquals(5, AofReplay.replay(path, restoredCore));
+			Assert.assertNull(restoredCore.get(new BytesWrapper("letters".getBytes(StandardCharsets.UTF_8))));
+			RedisString restoredString = (RedisString) restoredCore.get(new BytesWrapper("name".getBytes(StandardCharsets.UTF_8)));
+			Assert.assertEquals("twopair", restoredString.getValue().toUtf8String());
+		} finally {
+			Files.deleteIfExists(path);
+		}
+	}
+
+	/**
+	 * 验证LLEN返回列表长度、保持WRONGTYPE连接可用，并且不会写入AOF。
+	 *
+	 * @throws Exception 当临时文件或AOF读写失败时抛出
+	 */
+	@Test
+	public void testHandleLLenWithoutAofAppend() throws Exception {
+		Path path = Files.createTempFile("twopair-miniredis-llen-", ".aof");
+
+		try {
+			RedisCore sourceCore = new RedisCoreImpl();
+
+			try (AofFile aofFile = new AofFile(path)) {
+				EmbeddedChannel channel = new EmbeddedChannel(new RespEncoder(), new CommandHandler(sourceCore, aofFile));
+
+				try {
+					channel.writeInbound(command("LPUSH", "letters", "one", "two", "三"));
+					Assert.assertEquals(":3\r\n", readOutboundAsString(channel));
+
+					channel.writeInbound(command("LLEN", "letters"));
+					Assert.assertEquals(":3\r\n", readOutboundAsString(channel));
+
+					channel.writeInbound(command("LLEN", "missing"));
+					Assert.assertEquals(":0\r\n", readOutboundAsString(channel));
+
+					channel.writeInbound(command("SET", "name", "twopair"));
+					Assert.assertEquals("+OK\r\n", readOutboundAsString(channel));
+
+					channel.writeInbound(command("LLEN", "name"));
+					Assert.assertEquals("-WRONGTYPE Operation against a key holding the wrong kind of value\r\n", readOutboundAsString(channel));
+					Assert.assertTrue(channel.isOpen());
+				} finally {
+					channel.finishAndReleaseAll();
+				}
+			}
+
+			String aofContent = Files.readString(path, StandardCharsets.UTF_8);
+			Assert.assertFalse(aofContent.contains("LLEN"));
+
+			RedisCore restoredCore = new RedisCoreImpl();
+			Assert.assertEquals(2, AofReplay.replay(path, restoredCore));
+			Assert.assertEquals(3L, restoredCore.listLength(new BytesWrapper("letters".getBytes(StandardCharsets.UTF_8))));
+		} finally {
+			Files.deleteIfExists(path);
+		}
+	}
+
+	/**
+	 * 验证LRANGE的数组响应、越界规则、WRONGTYPE错误，并且不会写入AOF。
+	 *
+	 * @throws Exception 当临时文件或AOF读写失败时抛出
+	 */
+	@Test
+	public void testHandleLRangeWithoutAofAppend() throws Exception {
+		Path path = Files.createTempFile("twopair-miniredis-lrange-", ".aof");
+
+		try {
+			RedisCore sourceCore = new RedisCoreImpl();
+
+			try (AofFile aofFile = new AofFile(path)) {
+				EmbeddedChannel channel = new EmbeddedChannel(new RespEncoder(), new CommandHandler(sourceCore, aofFile));
+
+				try {
+					channel.writeInbound(command("LPUSH", "letters", "one", "two", "三"));
+					Assert.assertEquals(":3\r\n", readOutboundAsString(channel));
+
+					channel.writeInbound(command("LRANGE", "letters", "0", "1"));
+					Assert.assertEquals("*2\r\n$3\r\n三\r\n$3\r\ntwo\r\n", readOutboundAsString(channel));
+
+					channel.writeInbound(command("LRANGE", "letters", "3", "100"));
+					Assert.assertEquals("*0\r\n", readOutboundAsString(channel));
+
+					channel.writeInbound(command("SET", "name", "twopair"));
+					Assert.assertEquals("+OK\r\n", readOutboundAsString(channel));
+
+					channel.writeInbound(command("LRANGE", "name", "0", "-1"));
+					Assert.assertEquals("-WRONGTYPE Operation against a key holding the wrong kind of value\r\n", readOutboundAsString(channel));
+					Assert.assertTrue(channel.isOpen());
+				} finally {
+					channel.finishAndReleaseAll();
+				}
+			}
+
+			String aofContent = Files.readString(path, StandardCharsets.UTF_8);
+			Assert.assertFalse(aofContent.contains("LRANGE"));
+
+			RedisCore restoredCore = new RedisCoreImpl();
+			Assert.assertEquals(2, AofReplay.replay(path, restoredCore));
+			Assert.assertEquals(3L, restoredCore.listLength(new BytesWrapper("letters".getBytes(StandardCharsets.UTF_8))));
+		} finally {
+			Files.deleteIfExists(path);
+		}
+	}
+
 }

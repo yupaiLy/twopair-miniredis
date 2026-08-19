@@ -3,6 +3,10 @@ package cn.twopair.command;
 import cn.twopair.command.impl.Expire;
 import cn.twopair.command.impl.Ping;
 import cn.twopair.command.impl.Ttl;
+import cn.twopair.command.impl.list.LLen;
+import cn.twopair.command.impl.list.LPop;
+import cn.twopair.command.impl.list.LPush;
+import cn.twopair.command.impl.list.LRange;
 import cn.twopair.command.impl.string.Get;
 import cn.twopair.command.impl.string.Set;
 import cn.twopair.command.impl.string.SetEx;
@@ -92,6 +96,74 @@ public class CommandFactoryTest {
 		Assert.assertTrue(command instanceof SetEx);
 		Assert.assertEquals(CommandType.SETEX, command.type());
 	}
+
+	/**
+	 * 验证命令工厂能够根据小写LPUSH请求创建对应命令。
+	 */
+	@Test
+	public void testCreateLPush() {
+		RespArray array = new RespArray(new Resp[]{
+				new BulkString(new BytesWrapper("lpush".getBytes(StandardCharsets.UTF_8))),
+				new BulkString(new BytesWrapper("letters".getBytes(StandardCharsets.UTF_8))),
+				new BulkString(new BytesWrapper("one".getBytes(StandardCharsets.UTF_8)))
+		});
+
+		Command command = CommandFactory.from(array);
+
+		Assert.assertTrue(command instanceof LPush);
+		Assert.assertEquals(CommandType.LPUSH, command.type());
+	}
+
+	/**
+	 * 验证命令工厂能够根据小写LPOP请求创建对应命令。
+	 */
+	@Test
+	public void testCreateLPop() {
+		RespArray array = new RespArray(new Resp[]{
+				new BulkString(new BytesWrapper("lpop".getBytes(StandardCharsets.UTF_8))),
+				new BulkString(new BytesWrapper("letters".getBytes(StandardCharsets.UTF_8)))
+		});
+
+		Command command = CommandFactory.from(array);
+
+		Assert.assertTrue(command instanceof LPop);
+		Assert.assertEquals(CommandType.LPOP, command.type());
+	}
+
+	/**
+	 * 验证命令工厂能够根据小写LLEN请求创建对应命令。
+	 */
+	@Test
+	public void testCreateLLen() {
+		RespArray array = new RespArray(new Resp[]{
+				new BulkString(new BytesWrapper("llen".getBytes(StandardCharsets.UTF_8))),
+				new BulkString(new BytesWrapper("letters".getBytes(StandardCharsets.UTF_8)))
+		});
+
+		Command command = CommandFactory.from(array);
+
+		Assert.assertTrue(command instanceof LLen);
+		Assert.assertEquals(CommandType.LLEN, command.type());
+	}
+
+	/**
+	 * 验证命令工厂能够根据小写LRANGE请求创建对应命令。
+	 */
+	@Test
+	public void testCreateLRange() {
+		RespArray array = new RespArray(new Resp[]{
+				new BulkString(new BytesWrapper("lrange".getBytes(StandardCharsets.UTF_8))),
+				new BulkString(new BytesWrapper("letters".getBytes(StandardCharsets.UTF_8))),
+				new BulkString(new BytesWrapper("0".getBytes(StandardCharsets.UTF_8))),
+				new BulkString(new BytesWrapper("-1".getBytes(StandardCharsets.UTF_8)))
+		});
+
+		Command command = CommandFactory.from(array);
+
+		Assert.assertTrue(command instanceof LRange);
+		Assert.assertEquals(CommandType.LRANGE, command.type());
+	}
+
 
 
 	@Test

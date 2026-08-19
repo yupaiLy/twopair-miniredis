@@ -1,12 +1,15 @@
 package cn.twopair.core.impl;
 
 import cn.twopair.core.RedisCore;
+import cn.twopair.core.WrongTypeException;
 import cn.twopair.datatype.BytesWrapper;
+import cn.twopair.datatype.RedisList;
 import cn.twopair.datatype.RedisString;
 import org.junit.Assert;
 import org.junit.Test;
 
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
@@ -286,5 +289,175 @@ public class RedisCoreImplTest {
 		Assert.assertEquals(1, redisCore.removeExpired());
 		Assert.assertNull(redisCore.get(aliveKey));
 		Assert.assertEquals(0, redisCore.removeExpired());
+	}
+
+	/**
+	 * 验证LPUSH核心操作能够原子创建列表、追加元素、检查类型并替换过期列表。
+	 */
+	@Test
+	public void testLeftPush() {
+		AtomicLong currentTime = new AtomicLong(1000L);
+		RedisCore redisCore = new RedisCoreImpl(currentTime::get);
+		BytesWrapper key = bytes("letters");
+
+		Assert.assertEquals(
+				3L,
+				redisCore.leftPush(
+						key,
+						List.of(bytes("one"), bytes("two"), bytes("三"))
+				)
+		);
+		Assert.assertEquals(
+				4L,
+				redisCore.leftPush(key, List.of(bytes("zero")))
+		);
+
+		RedisList redisList = (RedisList) redisCore.get(key);
+		Assert.assertEquals("zero", redisList.leftPop().toUtf8String());
+		Assert.assertEquals("三", redisList.leftPop().toUtf8String());
+
+		BytesWrapper stringKey = bytes("name");
+		redisCore.put(stringKey, new RedisString(bytes("twopair")));
+
+		try {
+			redisCore.leftPush(stringKey, List.of(bytes("value")));
+			Assert.fail("对String执行LPUSH时应抛出WrongTypeException");
+		} catch (WrongTypeException e) {
+			Assert.assertEquals(
+					"WRONGTYPE Operation against a key holding the wrong kind of value",
+					e.getMessage()
+			);
+		}
+
+		BytesWrapper expiredKey = bytes("expired-list");
+		RedisList expiredList = new RedisList();
+		expiredList.leftPush(List.of(bytes("old")));
+		expiredList.setTimeout(1000L);
+		redisCore.put(expiredKey, expiredList);
+
+		Assert.assertEquals(
+				1L,
+				redisCore.leftPush(expiredKey, List.of(bytes("new")))
+		);
+		RedisList newList = (RedisList) redisCore.get(expiredKey);
+		Assert.assertNotSame(expiredList, newList);
+		Assert.assertEquals(-1L, newList.timeout());
+		Assert.assertEquals("new", newList.leftPop().toUtf8String());
+	}
+
+	/**
+	 * 验证LPOP核心操作能够弹出头部元素，并在列表为空、过期或类型错误时遵循Redis语义。
+	 */
+	@Test
+	public void testLeftPop() {
+		AtomicLong currentTime = new AtomicLong(1000L);
+		RedisCore redisCore = new RedisCoreImpl(currentTime::get);
+		BytesWrapper key = bytes("letters");
+
+		Assert.assertNull(redisCore.leftPop(key));
+
+		redisCore.leftPush(key, List.of(bytes("one"), bytes("two")));
+		Assert.assertEquals("two", redisCore.leftPop(key).toUtf8String());
+		Assert.assertNotNull(redisCore.get(key));
+		Assert.assertEquals("one", redisCore.leftPop(key).toUtf8String());
+		Assert.assertNull(redisCore.get(key));
+
+		BytesWrapper stringKey = bytes("name");
+		redisCore.put(stringKey, new RedisString(bytes("twopair")));
+		try {
+			redisCore.leftPop(stringKey);
+			Assert.fail("对String执行LPOP时应抛出WrongTypeException");
+		} catch (WrongTypeException e) {
+			Assert.assertNotNull(e);
+		}
+
+		BytesWrapper expiredKey = bytes("expired-list");
+		RedisList expiredList = new RedisList();
+		expiredList.leftPush(List.of(bytes("old")));
+		expiredList.setTimeout(1000L);
+		redisCore.put(expiredKey, expiredList);
+
+		Assert.assertNull(redisCore.leftPop(expiredKey));
+		Assert.assertNull(redisCore.get(expiredKey));
+	}
+
+	/**
+	 * 验证LLEN核心操作能够读取列表长度，并正确处理不存在、过期和类型错误。
+	 */
+	@Test
+	public void testListLength() {
+		AtomicLong currentTime = new AtomicLong(1000L);
+		RedisCore redisCore = new RedisCoreImpl(currentTime::get);
+		BytesWrapper key = bytes("letters");
+
+		Assert.assertEquals(0L, redisCore.listLength(key));
+
+		redisCore.leftPush(key, List.of(bytes("one"), bytes("two"), bytes("三")));
+		Assert.assertEquals(3L, redisCore.listLength(key));
+
+		BytesWrapper stringKey = bytes("name");
+		redisCore.put(stringKey, new RedisString(bytes("twopair")));
+		try {
+			redisCore.listLength(stringKey);
+			Assert.fail("对String执行LLEN时应抛出WrongTypeException");
+		} catch (WrongTypeException e) {
+			Assert.assertEquals("WRONGTYPE Operation against a key holding the wrong kind of value", e.getMessage());
+		}
+
+		BytesWrapper expiredKey = bytes("expired-list");
+		RedisList expiredList = new RedisList();
+		expiredList.leftPush(List.of(bytes("old")));
+		expiredList.setTimeout(1000L);
+		redisCore.put(expiredKey, expiredList);
+
+		Assert.assertEquals(0L, redisCore.listLength(expiredKey));
+		Assert.assertNull(redisCore.get(expiredKey));
+	}
+
+	/**
+	 * 验证LRANGE核心操作能够查询列表范围，并正确处理不存在、过期和类型错误。
+	 */
+	@Test
+	public void testListRange() {
+		AtomicLong currentTime = new AtomicLong(1000L);
+		RedisCore redisCore = new RedisCoreImpl(currentTime::get);
+		BytesWrapper key = bytes("letters");
+
+		Assert.assertTrue(redisCore.listRange(key, 0L, -1L).isEmpty());
+
+		redisCore.leftPush(key, List.of(bytes("one"), bytes("two"), bytes("三")));
+		List<BytesWrapper> range = redisCore.listRange(key, 0L, 1L);
+		Assert.assertEquals(2, range.size());
+		Assert.assertEquals("三", range.get(0).toUtf8String());
+		Assert.assertEquals("two", range.get(1).toUtf8String());
+
+		BytesWrapper stringKey = bytes("name");
+		redisCore.put(stringKey, new RedisString(bytes("twopair")));
+		try {
+			redisCore.listRange(stringKey, 0L, -1L);
+			Assert.fail("对String执行LRANGE时应抛出WrongTypeException");
+		} catch (WrongTypeException e) {
+			Assert.assertEquals("WRONGTYPE Operation against a key holding the wrong kind of value", e.getMessage());
+		}
+
+		BytesWrapper expiredKey = bytes("expired-list");
+		RedisList expiredList = new RedisList();
+		expiredList.leftPush(List.of(bytes("old")));
+		expiredList.setTimeout(1000L);
+		redisCore.put(expiredKey, expiredList);
+
+		Assert.assertTrue(redisCore.listRange(expiredKey, 0L, -1L).isEmpty());
+		Assert.assertNull(redisCore.get(expiredKey));
+	}
+
+
+	/**
+	 * 将字符串转换成UTF-8字节包装器。
+	 *
+	 * @param value 字符串内容
+	 * @return 字节包装器
+	 */
+	private BytesWrapper bytes(String value) {
+		return new BytesWrapper(value.getBytes(StandardCharsets.UTF_8));
 	}
 }

@@ -3,6 +3,8 @@ package cn.twopair.core;
 import cn.twopair.datatype.BytesWrapper;
 import cn.twopair.datatype.RedisData;
 
+import java.util.List;
+
 /**
  * @author ljj
  * @description Redis核心接口
@@ -55,4 +57,46 @@ public interface RedisCore {
 	 * @return 本次成功删除的数据数量
 	 */
 	int removeExpired();
+
+	/**
+	 * 原子地向列表头部压入多个元素，不存在时自动创建列表。
+	 *
+	 * @param key      列表key
+	 * @param elements 需要压入的元素
+	 * @return 压入完成后的列表长度
+	 * @throws WrongTypeException key存在但不是列表时抛出
+	 */
+	long leftPush(BytesWrapper key, List<BytesWrapper> elements);
+
+	/**
+	 * 原子地从列表头部弹出一个元素，列表为空后删除key。
+	 *
+	 * @param key 列表key
+	 * @return 弹出的元素；key不存在时返回null
+	 * @throws WrongTypeException key存在但不是列表时抛出
+	 */
+	BytesWrapper leftPop(BytesWrapper key);
+
+	/**
+	 * 原子地获取列表长度。
+	 *
+	 * @param key 列表key
+	 * @return 列表长度；key不存在时返回0
+	 * @throws WrongTypeException key存在但不是列表时抛出
+	 */
+	long listLength(BytesWrapper key);
+
+	/**
+	 * 原子地查询列表指定范围内的元素。
+	 *
+	 * @param key   列表key
+	 * @param start 起始下标
+	 * @param stop  结束下标
+	 * @return 范围内的元素；key不存在时返回空列表
+	 * @throws WrongTypeException key存在但不是列表时抛出
+	 */
+	List<BytesWrapper> listRange(BytesWrapper key, long start, long stop);
+
+
+
 }

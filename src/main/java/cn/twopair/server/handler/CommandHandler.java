@@ -4,6 +4,7 @@ import cn.twopair.command.Command;
 import cn.twopair.command.CommandFactory;
 import cn.twopair.command.WriteCommand;
 import cn.twopair.core.RedisCore;
+import cn.twopair.core.WrongTypeException;
 import cn.twopair.persistence.aof.AofFile;
 import cn.twopair.resp.Errors;
 import cn.twopair.resp.Resp;
@@ -80,6 +81,12 @@ public class CommandHandler extends SimpleChannelInboundHandler<Resp> {
 			 * 当前阶段返回错误，后续再完善写入失败后的服务保护策略。
 			 */
 			writeError(ctx, "AOF持久化失败");
+		} catch (WrongTypeException e) {
+			/*
+			 * WRONGTYPE是Redis标准错误类型，不能使用writeError()，
+			 * 因为writeError()会自动增加"ERR "前缀。
+			 */
+			ctx.writeAndFlush(new Errors(e.getMessage()));
 		} catch (IllegalArgumentException e) {
 			/*
 			 * 可预期的输入错误，例如空命令名、未知命令。

@@ -4,6 +4,10 @@ import cn.twopair.command.impl.Expire;
 import cn.twopair.command.impl.PExpireAt;
 import cn.twopair.command.impl.Ping;
 import cn.twopair.command.impl.Ttl;
+import cn.twopair.command.impl.list.LLen;
+import cn.twopair.command.impl.list.LPop;
+import cn.twopair.command.impl.list.LPush;
+import cn.twopair.command.impl.list.LRange;
 import cn.twopair.command.impl.string.Get;
 import cn.twopair.command.impl.string.Set;
 import cn.twopair.command.impl.string.SetEx;
@@ -51,6 +55,10 @@ public class CommandFactory {
 		COMMAND_MAP.put("EXPIRE", Expire::new);
 		COMMAND_MAP.put("PEXPIREAT", PExpireAt::new);
 		COMMAND_MAP.put("TTL", Ttl::new);
+		COMMAND_MAP.put("LPUSH", LPush::new);
+		COMMAND_MAP.put("LPOP", LPop::new);
+		COMMAND_MAP.put("LLEN", LLen::new);
+		COMMAND_MAP.put("LRANGE", LRange::new);
 	}
 
 	private CommandFactory() {

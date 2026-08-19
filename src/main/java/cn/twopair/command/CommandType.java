@@ -14,4 +14,11 @@ public enum CommandType {
 	EXPIRE,
 	PEXPIREAT,
 	TTL,
+	LPUSH,
+	LPOP,
+	RPUSH,
+	RPOP,
+	LLEN,
+	LRANGE,
+
 }
