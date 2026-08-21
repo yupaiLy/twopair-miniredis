@@ -42,6 +42,24 @@ public class RedisListTest {
 	}
 
 	/**
+	 * 验证多个元素按照RPUSH语义依次插入尾部，并能从尾部依次弹出。
+	 */
+	@Test
+	public void testRightPushAndRightPop() {
+		RedisList redisList = new RedisList();
+
+		long length = redisList.rightPush(List.of(bytes("one"), bytes("two"), bytes("三")));
+
+		Assert.assertEquals(3L, length);
+		Assert.assertEquals(List.of("one", "two", "三"), toText(redisList.range(0L, -1L)));
+		Assert.assertEquals("三", redisList.rightPop().toUtf8String());
+		Assert.assertEquals("two", redisList.rightPop().toUtf8String());
+		Assert.assertEquals("one", redisList.rightPop().toUtf8String());
+		Assert.assertNull(redisList.rightPop());
+		Assert.assertEquals(0L, redisList.size());
+	}
+
+	/**
 	 * 验证列表范围查询支持闭区间、负数下标和越界裁剪。
 	 */
 	@Test

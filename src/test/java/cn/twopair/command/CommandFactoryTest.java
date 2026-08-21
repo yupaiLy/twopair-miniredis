@@ -6,6 +6,8 @@ import cn.twopair.command.impl.list.LLen;
 import cn.twopair.command.impl.list.LPop;
 import cn.twopair.command.impl.list.LPush;
 import cn.twopair.command.impl.list.LRange;
+import cn.twopair.command.impl.list.RPop;
+import cn.twopair.command.impl.list.RPush;
 import cn.twopair.command.impl.set.*;
 import cn.twopair.command.impl.string.Get;
 import cn.twopair.command.impl.string.Set;
@@ -128,6 +130,23 @@ public class CommandFactoryTest {
 
 		Assert.assertTrue(command instanceof LPop);
 		Assert.assertEquals(CommandType.LPOP, command.type());
+	}
+
+	/**
+	 * 验证命令工厂能够创建RPUSH和RPOP命令。
+	 */
+	@Test
+	public void testCreateRightListCommands() {
+		RespArray pushArray = new RespArray(new Resp[]{new BulkString(new BytesWrapper("rpush".getBytes(StandardCharsets.UTF_8))), new BulkString(new BytesWrapper("letters".getBytes(StandardCharsets.UTF_8))), new BulkString(new BytesWrapper("one".getBytes(StandardCharsets.UTF_8)))});
+		RespArray popArray = new RespArray(new Resp[]{new BulkString(new BytesWrapper("rpop".getBytes(StandardCharsets.UTF_8))), new BulkString(new BytesWrapper("letters".getBytes(StandardCharsets.UTF_8)))});
+
+		Command push = CommandFactory.from(pushArray);
+		Command pop = CommandFactory.from(popArray);
+
+		Assert.assertTrue(push instanceof RPush);
+		Assert.assertEquals(CommandType.RPUSH, push.type());
+		Assert.assertTrue(pop instanceof RPop);
+		Assert.assertEquals(CommandType.RPOP, pop.type());
 	}
 
 	/**

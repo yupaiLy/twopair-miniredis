@@ -100,6 +100,16 @@ public interface RedisCore {
 	long leftPush(BytesWrapper key, List<BytesWrapper> elements);
 
 	/**
+	 * 原子地向列表尾部压入多个元素，不存在时自动创建列表。
+	 *
+	 * @param key      列表key
+	 * @param elements 需要压入的元素
+	 * @return 压入完成后的列表长度
+	 * @throws WrongTypeException key存在但不是列表时抛出
+	 */
+	long rightPush(BytesWrapper key, List<BytesWrapper> elements);
+
+	/**
 	 * 原子地从列表头部弹出一个元素，列表为空后删除key。
 	 *
 	 * @param key 列表key
@@ -107,6 +117,15 @@ public interface RedisCore {
 	 * @throws WrongTypeException key存在但不是列表时抛出
 	 */
 	BytesWrapper leftPop(BytesWrapper key);
+
+	/**
+	 * 原子地从列表尾部弹出一个元素，列表为空后删除key。
+	 *
+	 * @param key 列表key
+	 * @return 弹出的元素；key不存在时返回 {@code null}
+	 * @throws WrongTypeException key存在但不是列表时抛出
+	 */
+	BytesWrapper rightPop(BytesWrapper key);
 
 	/**
 	 * 原子地获取列表长度。

@@ -382,6 +382,49 @@ public class RedisCoreImplTest {
 	}
 
 	/**
+	 * 验证RPUSH和RPOP能够保持尾部顺序、删除空列表，并正确处理过期与错误类型。
+	 */
+	@Test
+	public void testRightPushAndRightPop() {
+		AtomicLong currentTime = new AtomicLong(1000L);
+		RedisCore redisCore = new RedisCoreImpl(currentTime::get);
+		BytesWrapper key = bytes("letters");
+
+		Assert.assertEquals(3L, redisCore.rightPush(key, List.of(bytes("one"), bytes("two"), bytes("三"))));
+		Assert.assertEquals(List.of(bytes("one"), bytes("two"), bytes("三")), redisCore.listRange(key, 0L, -1L));
+		Assert.assertEquals("三", redisCore.rightPop(key).toUtf8String());
+		Assert.assertEquals("two", redisCore.rightPop(key).toUtf8String());
+		Assert.assertEquals("one", redisCore.rightPop(key).toUtf8String());
+		Assert.assertNull(redisCore.rightPop(key));
+		Assert.assertNull(redisCore.get(key));
+
+		BytesWrapper stringKey = bytes("name");
+		redisCore.put(stringKey, new RedisString(bytes("twopair")));
+		try {
+			redisCore.rightPush(stringKey, List.of(bytes("value")));
+			Assert.fail("对String执行RPUSH时应抛出WrongTypeException");
+		} catch (WrongTypeException e) {
+			Assert.assertEquals("WRONGTYPE Operation against a key holding the wrong kind of value", e.getMessage());
+		}
+
+		try {
+			redisCore.rightPop(stringKey);
+			Assert.fail("对String执行RPOP时应抛出WrongTypeException");
+		} catch (WrongTypeException e) {
+			Assert.assertEquals("WRONGTYPE Operation against a key holding the wrong kind of value", e.getMessage());
+		}
+
+		BytesWrapper expiredKey = bytes("expired-list");
+		RedisList expiredList = new RedisList();
+		expiredList.rightPush(List.of(bytes("old")));
+		expiredList.setTimeout(1000L);
+		redisCore.put(expiredKey, expiredList);
+		Assert.assertEquals(1L, redisCore.rightPush(expiredKey, List.of(bytes("new"))));
+		Assert.assertEquals("new", redisCore.rightPop(expiredKey).toUtf8String());
+		Assert.assertNull(redisCore.get(expiredKey));
+	}
+
+	/**
 	 * 验证LLEN核心操作能够读取列表长度，并正确处理不存在、过期和类型错误。
 	 */
 	@Test

@@ -316,6 +316,45 @@ public class RedisCoreImpl implements RedisCore {
 	 * {@inheritDoc}
 	 */
 	@Override
+	public long rightPush(BytesWrapper key, List<BytesWrapper> elements) {
+		Objects.requireNonNull(key, "列表key不能为空");
+		Objects.requireNonNull(elements, "列表元素不能为空");
+
+		if (elements.isEmpty()) {
+			throw new IllegalArgumentException("列表元素不能为空");
+		}
+
+		AtomicLong resultLength = new AtomicLong();
+
+		map.compute(key, (currentKey, currentValue) -> {
+			long now = currentTimeMillis.getAsLong();
+
+			// 已过期的数据在逻辑上等同于不存在。
+			if (currentValue != null && currentValue.timeout() != -1L && currentValue.timeout() <= now) {
+				currentValue = null;
+			}
+
+			RedisList redisList;
+
+			if (currentValue == null) {
+				redisList = new RedisList();
+			} else if (currentValue instanceof RedisList list) {
+				redisList = list;
+			} else {
+				throw new WrongTypeException();
+			}
+
+			resultLength.set(redisList.rightPush(elements));
+			return redisList;
+		});
+
+		return resultLength.get();
+	}
+
+	/**
+	 * {@inheritDoc}
+	 */
+	@Override
 	public BytesWrapper leftPop(BytesWrapper key) {
 		Objects.requireNonNull(key, "列表key不能为空");
 		AtomicReference<BytesWrapper> poppedElement = new AtomicReference<>();
@@ -333,6 +372,40 @@ public class RedisCoreImpl implements RedisCore {
 			}
 
 			BytesWrapper element = redisList.leftPop();
+			poppedElement.set(element);
+
+			// Redis不会保留空列表，最后一个元素弹出后删除整个key。
+			if (redisList.size() == 0L) {
+				return null;
+			}
+
+			return redisList;
+		});
+
+		return poppedElement.get();
+	}
+
+	/**
+	 * {@inheritDoc}
+	 */
+	@Override
+	public BytesWrapper rightPop(BytesWrapper key) {
+		Objects.requireNonNull(key, "列表key不能为空");
+		AtomicReference<BytesWrapper> poppedElement = new AtomicReference<>();
+
+		map.computeIfPresent(key, (currentKey, currentValue) -> {
+			long now = currentTimeMillis.getAsLong();
+
+			// 已过期的数据直接删除，并按照不存在处理。
+			if (currentValue.timeout() != -1L && currentValue.timeout() <= now) {
+				return null;
+			}
+
+			if (!(currentValue instanceof RedisList redisList)) {
+				throw new WrongTypeException();
+			}
+
+			BytesWrapper element = redisList.rightPop();
 			poppedElement.set(element);
 
 			// Redis不会保留空列表，最后一个元素弹出后删除整个key。

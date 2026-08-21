@@ -2,10 +2,7 @@ package cn.twopair.command;
 
 import cn.twopair.command.impl.*;
 import cn.twopair.command.impl.hash.*;
-import cn.twopair.command.impl.list.LLen;
-import cn.twopair.command.impl.list.LPop;
-import cn.twopair.command.impl.list.LPush;
-import cn.twopair.command.impl.list.LRange;
+import cn.twopair.command.impl.list.*;
 import cn.twopair.command.impl.set.*;
 import cn.twopair.command.impl.string.Get;
 import cn.twopair.command.impl.string.Set;
@@ -55,6 +52,8 @@ public class CommandFactory {
 		COMMAND_MAP.put("TTL", Ttl::new);
 		COMMAND_MAP.put("LPUSH", LPush::new);
 		COMMAND_MAP.put("LPOP", LPop::new);
+		COMMAND_MAP.put("RPUSH", RPush::new);
+		COMMAND_MAP.put("RPOP", RPop::new);
 		COMMAND_MAP.put("LLEN", LLen::new);
 		COMMAND_MAP.put("LRANGE", LRange::new);
 		COMMAND_MAP.put("HSET", HSet::new);

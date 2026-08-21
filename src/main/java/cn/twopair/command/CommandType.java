@@ -32,9 +32,9 @@ public enum CommandType {
 	LPUSH,
 	/** LPOP列表头部弹出命令。 */
 	LPOP,
-	/** RPUSH列表尾部写入命令，当前预留但尚未注册实现。 */
+	/** RPUSH列表尾部写入命令。 */
 	RPUSH,
-	/** RPOP列表尾部弹出命令，当前预留但尚未注册实现。 */
+	/** RPOP列表尾部弹出命令。 */
 	RPOP,
 	/** LLEN列表长度查询命令。 */
 	LLEN,

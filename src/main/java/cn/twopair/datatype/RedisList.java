@@ -29,9 +29,23 @@ public class RedisList implements RedisData {
 		Objects.requireNonNull(elements, "列表元素不能为空");
 
 		for (BytesWrapper element : elements) {
-			values.addFirst(
-					Objects.requireNonNull(element, "列表元素不能为空")
-			);
+			values.addFirst(Objects.requireNonNull(element, "列表元素不能为空"));
+		}
+
+		return values.size();
+	}
+
+	/**
+	 * 按RPUSH语义将多个元素依次插入列表尾部。
+	 *
+	 * @param elements 需要插入的元素
+	 * @return 插入完成后的列表长度
+	 */
+	public synchronized long rightPush(List<BytesWrapper> elements) {
+		Objects.requireNonNull(elements, "列表元素不能为空");
+
+		for (BytesWrapper element : elements) {
+			values.addLast(Objects.requireNonNull(element, "列表元素不能为空"));
 		}
 
 		return values.size();
@@ -44,6 +58,15 @@ public class RedisList implements RedisData {
 	 */
 	public synchronized BytesWrapper leftPop() {
 		return values.pollFirst();
+	}
+
+	/**
+	 * 从列表尾部弹出一个元素。
+	 *
+	 * @return 尾部元素；列表为空时返回 {@code null}
+	 */
+	public synchronized BytesWrapper rightPop() {
+		return values.pollLast();
 	}
 
 	/**
