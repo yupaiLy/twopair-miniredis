@@ -33,6 +33,9 @@ public class AofFileTest {
 			try (AofFile aofFile = new AofFile(path)) {
 				aofFile.append(command("SET", "name", "twopair"));
 				aofFile.append(command("SET", "city", "杭州"));
+
+				// 追加只负责写入文件，持久化策略通过force显式刷盘。
+				aofFile.force();
 			}
 
 			String expected = "*3\r\n"
@@ -68,6 +71,9 @@ public class AofFileTest {
 						command("SET", "city", "杭州"),
 						command("PEXPIREAT", "city", "11000")
 				));
+
+				// 一批命令写入完成后只执行一次强制刷盘。
+				aofFile.force();
 			}
 
 			String expected = "*3\r\n"

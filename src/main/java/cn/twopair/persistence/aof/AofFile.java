@@ -18,11 +18,11 @@ import java.util.Objects;
 
 /**
  * @author ljj
- * @description 负责将Redis写命令按照RESP格式追加并刷入AOF文件。
+ * @description 负责将Redis写命令编码并追加到AOF文件，同时提供显式刷盘能力。
  * @date 2026/8/18
  * @twopair
  */
-public final class AofFile implements AutoCloseable {
+public final class AofFile implements AofStorage {
 	private static final Logger LOGGER = LoggerFactory.getLogger(AofFile.class);
 
 	private final FileChannel channel;
@@ -58,7 +58,7 @@ public final class AofFile implements AutoCloseable {
 	 * 将一条命令追加到AOF文件。
 	 *
 	 * @param command 需要持久化的RESP数组命令
-	 * @throws IOException 当文件写入或刷盘失败时抛出
+	 * @throws IOException 当文件写入失败时抛出
 	 */
 	public void append(RespArray command) throws IOException {
 		Objects.requireNonNull(command, "AOF命令不能为空");
@@ -68,11 +68,13 @@ public final class AofFile implements AutoCloseable {
 	/**
 	 * 将一批命令编码后一次性追加到AOF文件。
 	 *
-	 * <p>同一批命令共用一个缓冲区，并且只执行一次刷盘。
+	 * <p>该方法只负责写入，不主动执行强制刷盘。
+	 * 调用方根据AOF策略决定何时调用force()。
 	 *
 	 * @param commands 需要按顺序持久化的命令列表
-	 * @throws IOException 当文件写入或刷盘失败时抛出
+	 * @throws IOException 当文件写入失败时抛出
 	 */
+	@Override
 	public synchronized void appendAll(List<RespArray> commands) throws IOException {
 		Objects.requireNonNull(commands, "AOF命令列表不能为空");
 
@@ -99,13 +101,23 @@ public final class AofFile implements AutoCloseable {
 			while (byteBuffer.hasRemaining()) {
 				channel.write(byteBuffer);
 			}
-
-			// 同一批命令只刷盘一次，减少磁盘同步次数。
-			channel.force(false);
 			LOGGER.debug("AOF追加完成: path={}, commands={}, bytes={}", path, commands.size(), bytes.length);
 		} finally {
 			buffer.release();
 		}
+	}
+
+	/**
+	 * 将已经写入操作系统文件缓存的AOF内容强制刷入磁盘。
+	 *
+	 * <p>false表示只要求同步文件内容，不强制同步文件元数据。
+	 *
+	 * @throws IOException 当刷盘失败时抛出
+	 */
+	@Override
+	public synchronized void force() throws IOException {
+		channel.force(false);
+		LOGGER.debug("AOF刷盘完成: path={}", path);
 	}
 
 	/**

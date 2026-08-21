@@ -1,6 +1,7 @@
 package cn.twopair.server;
 
 import cn.twopair.core.impl.RedisCoreImpl;
+import cn.twopair.persistence.aof.AofFsyncPolicy;
 import org.junit.Assert;
 import org.junit.Test;
 
@@ -301,6 +302,41 @@ public class RedisServerTest {
 			String aofContent = Files.readString(path, StandardCharsets.UTF_8);
 			Assert.assertTrue(aofContent.contains("twopair"));
 			Assert.assertTrue(aofContent.contains("杭州"));
+		} finally {
+			if (server != null) {
+				server.stop();
+			}
+			Files.deleteIfExists(path);
+		}
+	}
+
+	/**
+	 * 验证服务器能使用EVERYSEC策略执行写命令，并在关闭时完成最终刷盘。
+	 *
+	 * @throws Exception 当临时文件、网络连接或AOF处理失败时抛出
+	 */
+	@Test
+	public void testEverysecPolicyPersistsWritesOnShutdown() throws Exception {
+		Path path = Files.createTempFile("twopair-miniredis-everysec-", ".aof");
+		RedisServer server = null;
+
+		try {
+			server = new RedisServer(0, path, AofFsyncPolicy.EVERYSEC);
+			server.start();
+
+			try (Socket client = new Socket("127.0.0.1", server.getPort())) {
+				client.setSoTimeout(2000);
+				OutputStream output = client.getOutputStream();
+				BufferedReader input = new BufferedReader(new InputStreamReader(client.getInputStream(), StandardCharsets.UTF_8));
+
+				output.write("*3\r\n$3\r\nSET\r\n$4\r\nname\r\n$7\r\ntwopair\r\n".getBytes(StandardCharsets.UTF_8));
+				output.flush();
+				Assert.assertEquals("+OK", input.readLine());
+			}
+
+			server.stop();
+			server = null;
+			Assert.assertTrue(Files.readString(path, StandardCharsets.UTF_8).contains("twopair"));
 		} finally {
 			if (server != null) {
 				server.stop();

@@ -1,5 +1,6 @@
 package cn.twopair;
 
+import cn.twopair.persistence.aof.AofFsyncPolicy;
 import cn.twopair.server.RedisServer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -12,15 +13,19 @@ import org.slf4j.LoggerFactory;
  */
 public class Main {
 	private static final Logger LOGGER = LoggerFactory.getLogger(Main.class);
+	public static final String AOF_FSYNC_PROPERTY = "miniredis.aof.fsync";
 
+	/**
+	 * 读取启动配置并运行MiniRedis服务。
+	 *
+	 * @param args 命令行参数，当前版本暂未使用
+	 */
 	public static void main(String[] args) {
-		RedisServer server = new RedisServer();
+		RedisServer server = createServer();
 		LOGGER.info("MiniRedis应用开始启动");
 
 		// JVM 退出或按下 Ctrl+C 时释放端口和 Netty 线程。
-		Runtime.getRuntime().addShutdownHook(
-				new Thread(server::stop, "mini-redis-shutdown")
-		);
+		Runtime.getRuntime().addShutdownHook(new Thread(server::stop, "mini-redis-shutdown"));
 
 		try {
 			server.start();
@@ -32,5 +37,25 @@ public class Main {
 			server.stop();
 			LOGGER.info("MiniRedis应用已退出");
 		}
+	}
+
+	/**
+	 * 根据外部配置创建Redis服务。
+	 *
+	 * @return 已完成配置但尚未启动的Redis服务
+	 */
+	static RedisServer createServer() {
+		return new RedisServer(RedisServer.DEFAULT_PORT, RedisServer.DEFAULT_AOF_PATH, loadAofFsyncPolicy());
+	}
+
+	/**
+	 * 从JVM系统属性读取AOF刷盘策略，未配置时保持原有ALWAYS策略。
+	 *
+	 * @return 当前启动使用的AOF刷盘策略
+	 * @throws IllegalArgumentException 配置值不受支持时抛出
+	 */
+	static AofFsyncPolicy loadAofFsyncPolicy() {
+		String configuredValue = System.getProperty(AOF_FSYNC_PROPERTY, RedisServer.DEFAULT_AOF_FSYNC_POLICY.name());
+		return AofFsyncPolicy.parse(configuredValue);
 	}
 }

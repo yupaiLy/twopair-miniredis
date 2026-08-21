@@ -2,7 +2,8 @@ package cn.twopair.server;
 
 import cn.twopair.core.RedisCore;
 import cn.twopair.core.impl.RedisCoreImpl;
-import cn.twopair.persistence.aof.AofFile;
+import cn.twopair.persistence.aof.AofFsyncPolicy;
+import cn.twopair.persistence.aof.AofPersistence;
 import cn.twopair.persistence.aof.AofReplay;
 import cn.twopair.server.codec.RespDecoder;
 import cn.twopair.server.codec.RespEncoder;
@@ -60,15 +61,26 @@ public class RedisServer implements AutoCloseable {
 	private ScheduledFuture<?> expirationCleanupTask;
 
 	public static final Path DEFAULT_AOF_PATH = Path.of("data", "appendonly.aof");
-	private final Path aofPath;
-	private AofFile aofFile;
+	public static final AofFsyncPolicy DEFAULT_AOF_FSYNC_POLICY = AofFsyncPolicy.ALWAYS;
 
+	private final Path aofPath;
+	private final AofFsyncPolicy aofFsyncPolicy;
+	private AofPersistence aofPersistence;
+
+	/**
+	 * 使用默认端口、默认AOF路径和默认刷盘策略创建服务。
+	 */
 	public RedisServer() {
-		this(DEFAULT_PORT, DEFAULT_AOF_PATH);
+		this(DEFAULT_PORT, DEFAULT_AOF_PATH, DEFAULT_AOF_FSYNC_POLICY);
 	}
 
+	/**
+	 * 创建未启用AOF的Redis服务。
+	 *
+	 * @param port 服务监听端口
+	 */
 	public RedisServer(int port) {
-		this(port, new RedisCoreImpl(), DEFAULT_CLEANUP_INTERVAL_MILLIS, null);
+		this(port, new RedisCoreImpl(), DEFAULT_CLEANUP_INTERVAL_MILLIS, null, DEFAULT_AOF_FSYNC_POLICY);
 	}
 
 	/**
@@ -78,24 +90,53 @@ public class RedisServer implements AutoCloseable {
 	 * @param aofPath AOF文件路径
 	 */
 	public RedisServer(int port, Path aofPath) {
-		this(
-				port,
-				new RedisCoreImpl(),
-				DEFAULT_CLEANUP_INTERVAL_MILLIS,
-				Objects.requireNonNull(aofPath, "AOF文件路径不能为空")
-		);
+		this(port, aofPath, DEFAULT_AOF_FSYNC_POLICY);
 	}
 
+	/**
+	 * 使用指定AOF路径和刷盘策略创建Redis服务。
+	 *
+	 * @param port           服务监听端口
+	 * @param aofPath        AOF文件路径
+	 * @param aofFsyncPolicy AOF刷盘策略
+	 */
+	public RedisServer(int port, Path aofPath, AofFsyncPolicy aofFsyncPolicy) {
+		this(port, new RedisCoreImpl(), DEFAULT_CLEANUP_INTERVAL_MILLIS, Objects.requireNonNull(aofPath, "AOF文件路径不能为空"), aofFsyncPolicy);
+	}
+
+	/**
+	 * 使用指定核心存储和过期清理间隔创建未启用AOF的服务。
+	 *
+	 * @param port                  服务监听端口
+	 * @param redisCore             Redis核心存储
+	 * @param cleanupIntervalMillis 过期清理间隔，单位为毫秒
+	 */
 	RedisServer(int port, RedisCore redisCore, long cleanupIntervalMillis) {
-		this(port, redisCore, cleanupIntervalMillis, null);
+		this(port, redisCore, cleanupIntervalMillis, null, DEFAULT_AOF_FSYNC_POLICY);
 	}
 
-	RedisServer(
-			int port,
-			RedisCore redisCore,
-			long cleanupIntervalMillis,
-			Path aofPath
-	) {
+	/**
+	 * 使用默认刷盘策略创建可配置内部依赖的Redis服务。
+	 *
+	 * @param port                  服务监听端口
+	 * @param redisCore             Redis核心存储
+	 * @param cleanupIntervalMillis 过期清理间隔，单位为毫秒
+	 * @param aofPath               AOF文件路径；为null表示禁用AOF
+	 */
+	RedisServer(int port, RedisCore redisCore, long cleanupIntervalMillis, Path aofPath) {
+		this(port, redisCore, cleanupIntervalMillis, aofPath, DEFAULT_AOF_FSYNC_POLICY);
+	}
+
+	/**
+	 * 使用完整配置创建Redis服务。
+	 *
+	 * @param port                  服务监听端口
+	 * @param redisCore             Redis核心存储
+	 * @param cleanupIntervalMillis 过期清理间隔，单位为毫秒
+	 * @param aofPath               AOF文件路径；为null表示禁用AOF
+	 * @param aofFsyncPolicy        AOF刷盘策略
+	 */
+	RedisServer(int port, RedisCore redisCore, long cleanupIntervalMillis, Path aofPath, AofFsyncPolicy aofFsyncPolicy) {
 		if (cleanupIntervalMillis <= 0L) {
 			throw new IllegalArgumentException("主动清理间隔必须大于0");
 		}
@@ -104,17 +145,21 @@ public class RedisServer implements AutoCloseable {
 		this.redisCore = Objects.requireNonNull(redisCore, "RedisCore不能为空");
 		this.cleanupIntervalMillis = cleanupIntervalMillis;
 		this.aofPath = aofPath;
+		this.aofFsyncPolicy = Objects.requireNonNull(aofFsyncPolicy, "AOF刷盘策略不能为空");
 
-		this.expirationExecutor =
-				Executors.newSingleThreadScheduledExecutor(runnable -> {
-					Thread thread = new Thread(
-							runnable,
-							"redis-expiration-cleaner"
-					);
-					thread.setDaemon(true);
-					return thread;
-				});
+		this.expirationExecutor = Executors.newSingleThreadScheduledExecutor(runnable -> {
+			Thread thread = new Thread(runnable, "redis-expiration-cleaner");
+			thread.setDaemon(true);
+			return thread;
+		});
 	}
+
+	/**
+	 * 获取服务器实际监听端口。
+	 *
+	 * @return 服务器实际监听端口
+	 * @throws IllegalStateException 服务器尚未启动时抛出
+	 */
 	public int getPort() {
 		if (serverChannel == null) {
 			throw new IllegalStateException("Redis服务尚未启动");
@@ -123,12 +168,18 @@ public class RedisServer implements AutoCloseable {
 		return ((InetSocketAddress) serverChannel.localAddress()).getPort();
 	}
 
+	/**
+	 * 重放AOF并启动Netty服务、命令处理与过期清理任务。
+	 *
+	 * @throws IllegalStateException AOF初始化、端口绑定或启动过程失败时抛出
+	 */
 	public void start() {
 		LOGGER.info(
-				"Redis服务开始启动: requestedPort={}, aofEnabled={}, aofPath={}, cleanupIntervalMs={}",
+				"Redis服务开始启动: requestedPort={}, aofEnabled={}, aofPath={}, aofFsyncPolicy={}, cleanupIntervalMs={}",
 				port,
 				aofPath != null,
 				aofPath,
+				aofFsyncPolicy,
 				cleanupIntervalMillis
 		);
 
@@ -139,7 +190,7 @@ public class RedisServer implements AutoCloseable {
 				LOGGER.info("AOF恢复完成: path={}, replayedCommands={}", aofPath.toAbsolutePath(), replayedCount);
 
 				// 重放完成后再打开文件，记录服务器运行期间的新写命令。
-				aofFile = new AofFile(aofPath);
+				aofPersistence = new AofPersistence(aofPath, aofFsyncPolicy);
 			}
 			// Boss 组使用一个线程，负责接收客户端连接。
 			bossGroup = new MultiThreadIoEventLoopGroup(
@@ -163,7 +214,7 @@ public class RedisServer implements AutoCloseable {
 							channel.pipeline()
 									.addLast(new RespDecoder())
 									.addLast(new RespEncoder())
-									.addLast(new CommandHandler(redisCore, aofFile));
+									.addLast(new CommandHandler(redisCore, aofPersistence));
 						}
 					});
 
@@ -278,12 +329,12 @@ public class RedisServer implements AutoCloseable {
 			workerFuture.syncUninterruptibly();
 		}
 
-		if (aofFile != null) {
+		if (aofPersistence != null) {
 			try {
-				aofFile.close();
+				aofPersistence.close();
 			} catch (IOException e) {
-				LOGGER.error("AOF文件关闭失败: path={}", aofPath, e);
-				throw new IllegalStateException("AOF文件关闭失败", e);
+				LOGGER.error("AOF持久化协调器关闭失败: path={}", aofPath, e);
+				throw new IllegalStateException("AOF持久化协调器关闭失败", e);
 			}
 		}
 

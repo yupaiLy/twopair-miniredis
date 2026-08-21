@@ -63,7 +63,7 @@ redis-cli 发送 *2\r\n$3\r\nGET\r\n$3\r\nkey\r\n
       每次请求 new 一个命令对象（命令有状态，不能复用）
    ▼ ③ Command.handle(RedisCore)
       命令对象解析参数 → 读/写 RedisCoreImpl
-      └─ 写命令额外执行：synchronized(aofFile) { 内存修改 → AOF 追加 }
+      └─ 写命令额外执行：synchronized(aofPersistence) { 内存修改 → AOF 追加 }
    ▼ ④ RespEncoder（MessageToByteEncoder）
       Resp 响应对象编码回字节流，writeAndFlush 给客户端
 ```
@@ -113,7 +113,7 @@ redis-cli 发送 *2\r\n$3\r\nGET\r\n$3\r\nkey\r\n
 
 ### Netty 网络层
 
-- 主从 Reactor：boss ×1 只做 accept，worker ×N 负责连接读写；所有连接**共享同一个 `RedisCore` 与 `AofFile`**。
+- 主从 Reactor：boss ×1 只做 accept，worker ×N 负责连接读写；所有连接**共享同一个 `RedisCore` 与 `AofPersistence`**。
 - 生命周期管理：`AtomicBoolean.compareAndSet` 保证 `close()` 幂等（shutdown hook、finally、重复调用只有一次生效）；`shutdownGracefully(2s, 12s)` 并行关闭两组线程；bind 结果显式检查 Future，准确区分端口占用与其他启动失败。
 - 异常分层不污染 EventLoop：`WrongTypeException` → WRONGTYPE；`IllegalArgumentException`（参数/未知命令）→ ERR；AOF `IOException` → ERR 且不影响连接；其余 `RuntimeException` 兜底为通用错误，不向客户端泄漏内部信息。
 
@@ -133,8 +133,8 @@ redis-cli 发送 *2\r\n$3\r\nGET\r\n$3\r\nkey\r\n
 ### AOF 持久化
 
 - **追加命令而非数据**：写命令成功后按 RESP 原格式追加到 `data/appendonly.aof`，与官方 AOF 思路一致。
-- **顺序一致性**：`synchronized(aofFile)` 内"先内存修改、后 AOF 追加"，多连接下内存修改顺序与文件顺序严格一致。
-- **同步刷盘**：每批命令共用一个 ByteBuf、一次 write 循环（处理部分写）+ 一次 `channel.force(false)`。持久性优先于吞吐，是当前版本明确的取舍，异步化为后续方向（详见 [blogs/stage-06](blogs/stage-06-aof-persistence.md)）。
+- **顺序一致性**：`synchronized(aofPersistence)` 内"先内存修改、后 AOF 追加"，多连接下内存修改顺序与文件顺序严格一致。
+- **可配置刷盘**：`ALWAYS` 每批命令追加后立即 `force(false)`；`EVERYSEC` 只在请求线程追加文件，由独立的 `redis-aof-fsync` 线程每秒检查并刷入新增数据，避免每条写命令都在 Netty EventLoop 上等待磁盘，也避免空闲时无意义刷盘。
 - **TTL 不重新计时**：`SETEX`/`EXPIRE` 落盘前由 `WriteCommand.toAofCommands()` 重写为 `SET` + `PEXPIREAT 绝对时间戳`，重启重放后剩余 TTL 与宕机前连续。
 - **崩溃自愈**：启动时 [`AofReplay`](src/main/java/cn/twopair/persistence/aof/AofReplay.java) 在绑定端口**之前**重放全部命令；若文件末尾残留不完整命令（宕机写了一半），自动截断到最后一条完整命令后继续。
 
@@ -149,6 +149,9 @@ mvn -q dependency:build-classpath -Dmdep.outputFile=target/runtime-classpath.txt
 
 # 启动（默认端口 6378，AOF 文件 data/appendonly.aof）
 java -cp "target/classes:$(cat target/runtime-classpath.txt)" cn.twopair.Main
+
+# 使用EVERYSEC策略启动（操作系统崩溃或断电时，最多可能丢失约1秒尚未刷盘的数据）
+java -Dminiredis.aof.fsync=everysec -cp "target/classes:$(cat target/runtime-classpath.txt)" cn.twopair.Main
 ```
 
 日志显示 `Redis服务启动完成: localAddress=...:6378` 即就绪。
@@ -213,16 +216,16 @@ $ redis-cli -p 6378 TTL demo:cache      # 绝对时间恢复，TTL 没有重新�
 
 ## 测试与性能
 
-**测试**：`mvn test` —— **158 个用例 / 40 个测试类，全部通过**。覆盖 RESP 编解码（含半包、非法输入）、四种数据结构、RedisCore 并发与过期语义、25 个命令的参数校验与执行、Netty EmbeddedChannel 集成测试、AOF 追加与重放（含尾部截断）。
+**测试**：`mvn test` —— **168 个用例 / 43 个测试类，全部通过**。覆盖 RESP 编解码（含半包、非法输入）、四种数据结构、RedisCore 并发与过期语义、25 个命令的参数校验与执行、Netty EmbeddedChannel 集成测试、AOF 追加、刷盘策略与重放（含尾部截断）。
 
-**性能**（本机回环，`redis-benchmark -n 10000 -c 50 -d 64`，每轮前预热 2000 次，macOS Apple Silicon）：
+**性能**（本机回环，`redis-benchmark -n 10000 -c 50 -d 64 -t set,get`，macOS Apple Silicon；同版本、同日志级别、全新临时AOF文件）：
 
-| 配置 | SET | GET |
-|---|---:|---:|
-| 默认启动（AOF 开启，每批同步刷盘） | 259 ops/s | 67,568 ops/s |
-| 纯内存（AOF 关闭，对照组） | 43,290 ops/s | 46,729 ops/s |
+| 配置 | SET ops/s | SET p50 | GET ops/s | GET p50 |
+|---|---:|---:|---:|---:|
+| `ALWAYS` | 272.11 | 146.047 ms | 133,333.33 | 0.183 ms |
+| `EVERYSEC`（三轮中位数） | 112,359.55 | 0.431 ms | 178,571.42 | 0.151 ms |
 
-读路径全内存（ConcurrentHashMap），吞吐不受 AOF 刷盘限制；写路径受 `channel.force` 同步刷盘支配——这是"正确性优先"的有意设计，写命令同时经全局锁串行化以保证内存与 AOF 顺序一致。数据为单机单轮快照，完整方法与对照结果见 [性能测试报告](docs/benchmark-report-2026-08-20.md)。
+`EVERYSEC` 的 SET 吞吐比同版本 `ALWAYS` 提升约 **413 倍**：请求线程只负责追加文件，后台线程每秒刷盘，不再让每条命令都在 Netty EventLoop 上等待磁盘。完整方法、历史基线和限制见 [性能测试报告](docs/benchmark-report-2026-08-20.md)。
 
 ## 已知限制
 
@@ -230,13 +233,13 @@ $ redis-cli -p 6378 TTL demo:cache      # 绝对时间恢复，TTL 没有重新�
 
 - **无事务**（MULTI/EXEC/WATCH）、无 Lua 脚本
 - **无主从复制、无哨兵、无集群**；单节点，AOF 是唯一持久化手段
-- **无 RDB 快照**，无 AOF 重写（文件只增不减），无 fsync 策略配置
+- **无 RDB 快照**，无 AOF 重写（文件只增不减）；刷盘策略目前支持 `ALWAYS` 和 `EVERYSEC`，暂不支持 `NO`
 - 单数据库，`SELECT` 仅兼容 `0`
 - `SET` 不支持 `EX/PX/NX/XX` 选项（TTL 请用 `SETEX`）
 - `SCAN/HSCAN/SSCAN` 使用快照、排序和下标游标实现，不是官方 Redis 的渐进式哈希桶遍历，不适合大数据量
 - 无阻塞命令（BLPOP/BRPOP）、发布订阅、ZSET/Bitmap/Stream 等结构
 - 无 `INFO/CONFIG/CLIENT` 等管理命令，无 AUTH 认证（请勿暴露到非信任网络）
-- 写路径全局锁 + 每批 force：写吞吐以刷盘为上限，宕机窗口最多丢最后一批（AOF 失败时内存已改、不回滚，向客户端报错）
+- 写路径仍通过全局锁保证内存修改顺序与AOF顺序一致；AOF失败时内存已修改但不会回滚，客户端会收到错误响应
 
 ## 延伸阅读
 
@@ -248,4 +251,5 @@ $ redis-cli -p 6378 TTL demo:cache      # 绝对时间恢复，TTL 没有重新�
 - [stage-05 TTL 过期](blogs/stage-05-ttl-expiration.md)
 - [stage-06 AOF 持久化](blogs/stage-06-aof-persistence.md)
 - [stage-07 List、Hash、Set 与游标扫描](blogs/stage-07-data-structures.md)
+- [stage-08 AOF 刷盘策略与性能优化](blogs/stage-08-aof-performance.md)
 - [MiniRedis 性能测试报告](docs/benchmark-report-2026-08-20.md)

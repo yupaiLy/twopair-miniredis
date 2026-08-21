@@ -3,7 +3,8 @@ package cn.twopair.server.handler;
 import cn.twopair.core.RedisCore;
 import cn.twopair.core.impl.RedisCoreImpl;
 import cn.twopair.datatype.*;
-import cn.twopair.persistence.aof.AofFile;
+import cn.twopair.persistence.aof.AofFsyncPolicy;
+import cn.twopair.persistence.aof.AofPersistence;
 import cn.twopair.persistence.aof.AofReplay;
 import cn.twopair.resp.BulkString;
 import cn.twopair.resp.Resp;
@@ -613,7 +614,7 @@ public class CommandHandlerTest {
 		try {
 			RedisCore redisCore = new RedisCoreImpl();
 
-			try (AofFile aofFile = new AofFile(path)) {
+			try (AofPersistence aofFile = new AofPersistence(path, AofFsyncPolicy.ALWAYS)) {
 				EmbeddedChannel channel = new EmbeddedChannel(
 						new RespEncoder(),
 						new CommandHandler(redisCore, aofFile)
@@ -670,7 +671,7 @@ public class CommandHandlerTest {
 		try {
 			RedisCore sourceCore = new RedisCoreImpl(writeTime::get);
 
-			try (AofFile aofFile = new AofFile(path)) {
+			try (AofPersistence aofFile = new AofPersistence(path, AofFsyncPolicy.ALWAYS)) {
 				EmbeddedChannel channel = new EmbeddedChannel(
 						new RespEncoder(),
 						new CommandHandler(sourceCore, aofFile)
@@ -745,7 +746,7 @@ public class CommandHandlerTest {
 			}
 		};
 
-		try (AofFile aofFile = new AofFile(path)) {
+		try (AofPersistence aofFile = new AofPersistence(path, AofFsyncPolicy.ALWAYS)) {
 			EmbeddedChannel firstChannel = new EmbeddedChannel(
 					new RespEncoder(),
 					new CommandHandler(sourceCore, aofFile)
@@ -836,7 +837,7 @@ public class CommandHandlerTest {
 		try {
 			RedisCore sourceCore = new RedisCoreImpl();
 
-			try (AofFile aofFile = new AofFile(path)) {
+			try (AofPersistence aofFile = new AofPersistence(path, AofFsyncPolicy.ALWAYS)) {
 				EmbeddedChannel channel = new EmbeddedChannel(new RespEncoder(), new CommandHandler(sourceCore, aofFile));
 
 				try {
@@ -884,7 +885,7 @@ public class CommandHandlerTest {
 		try {
 			RedisCore sourceCore = new RedisCoreImpl();
 
-			try (AofFile aofFile = new AofFile(path)) {
+			try (AofPersistence aofFile = new AofPersistence(path, AofFsyncPolicy.ALWAYS)) {
 				EmbeddedChannel channel = new EmbeddedChannel(new RespEncoder(), new CommandHandler(sourceCore, aofFile));
 
 				try {
@@ -936,7 +937,7 @@ public class CommandHandlerTest {
 		try {
 			RedisCore sourceCore = new RedisCoreImpl();
 
-			try (AofFile aofFile = new AofFile(path)) {
+			try (AofPersistence aofFile = new AofPersistence(path, AofFsyncPolicy.ALWAYS)) {
 				EmbeddedChannel channel = new EmbeddedChannel(new RespEncoder(), new CommandHandler(sourceCore, aofFile));
 
 				try {
@@ -983,7 +984,7 @@ public class CommandHandlerTest {
 		try {
 			RedisCore sourceCore = new RedisCoreImpl();
 
-			try (AofFile aofFile = new AofFile(path)) {
+			try (AofPersistence aofFile = new AofPersistence(path, AofFsyncPolicy.ALWAYS)) {
 				EmbeddedChannel channel = new EmbeddedChannel(new RespEncoder(), new CommandHandler(sourceCore, aofFile));
 
 				try {
@@ -1030,7 +1031,7 @@ public class CommandHandlerTest {
 		try {
 			RedisCore sourceCore = new RedisCoreImpl();
 
-			try (AofFile aofFile = new AofFile(path)) {
+			try (AofPersistence aofFile = new AofPersistence(path, AofFsyncPolicy.ALWAYS)) {
 				EmbeddedChannel channel = new EmbeddedChannel(new RespEncoder(), new CommandHandler(sourceCore, aofFile));
 
 				try {
@@ -1078,7 +1079,7 @@ public class CommandHandlerTest {
 		try {
 			RedisCore sourceCore = new RedisCoreImpl();
 
-			try (AofFile aofFile = new AofFile(path)) {
+			try (AofPersistence aofFile = new AofPersistence(path, AofFsyncPolicy.ALWAYS)) {
 				EmbeddedChannel channel = new EmbeddedChannel(new RespEncoder(), new CommandHandler(sourceCore, aofFile));
 
 				try {
@@ -1128,7 +1129,7 @@ public class CommandHandlerTest {
 		try {
 			RedisCore sourceCore = new RedisCoreImpl();
 
-			try (AofFile aofFile = new AofFile(path)) {
+			try (AofPersistence aofFile = new AofPersistence(path, AofFsyncPolicy.ALWAYS)) {
 				EmbeddedChannel channel = new EmbeddedChannel(new RespEncoder(), new CommandHandler(sourceCore, aofFile));
 
 				try {
@@ -1179,7 +1180,7 @@ public class CommandHandlerTest {
 		try {
 			RedisCore sourceCore = new RedisCoreImpl();
 
-			try (AofFile aofFile = new AofFile(path)) {
+			try (AofPersistence aofFile = new AofPersistence(path, AofFsyncPolicy.ALWAYS)) {
 				EmbeddedChannel channel = new EmbeddedChannel(new RespEncoder(), new CommandHandler(sourceCore, aofFile));
 
 				try {
@@ -1226,7 +1227,7 @@ public class CommandHandlerTest {
 		try {
 			RedisCore sourceCore = new RedisCoreImpl();
 
-			try (AofFile aofFile = new AofFile(path)) {
+			try (AofPersistence aofFile = new AofPersistence(path, AofFsyncPolicy.ALWAYS)) {
 				EmbeddedChannel channel = new EmbeddedChannel(new RespEncoder(), new CommandHandler(sourceCore, aofFile));
 
 				try {
@@ -1275,7 +1276,7 @@ public class CommandHandlerTest {
 		try {
 			RedisCore sourceCore = new RedisCoreImpl();
 
-			try (AofFile aofFile = new AofFile(path)) {
+			try (AofPersistence aofFile = new AofPersistence(path, AofFsyncPolicy.ALWAYS)) {
 				EmbeddedChannel channel = new EmbeddedChannel(new RespEncoder(), new CommandHandler(sourceCore, aofFile));
 
 				try {
@@ -1327,7 +1328,7 @@ public class CommandHandlerTest {
 		try {
 			RedisCore sourceCore = new RedisCoreImpl();
 
-			try (AofFile aofFile = new AofFile(path)) {
+			try (AofPersistence aofFile = new AofPersistence(path, AofFsyncPolicy.ALWAYS)) {
 				EmbeddedChannel channel = new EmbeddedChannel(new RespEncoder(), new CommandHandler(sourceCore, aofFile));
 
 				try {
@@ -1377,7 +1378,7 @@ public class CommandHandlerTest {
 		try {
 			RedisCore sourceCore = new RedisCoreImpl();
 
-			try (AofFile aofFile = new AofFile(path)) {
+			try (AofPersistence aofFile = new AofPersistence(path, AofFsyncPolicy.ALWAYS)) {
 				EmbeddedChannel channel = new EmbeddedChannel(new RespEncoder(), new CommandHandler(sourceCore, aofFile));
 
 				try {

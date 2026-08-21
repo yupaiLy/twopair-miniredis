@@ -5,7 +5,7 @@ import cn.twopair.command.CommandFactory;
 import cn.twopair.command.WriteCommand;
 import cn.twopair.core.RedisCore;
 import cn.twopair.core.WrongTypeException;
-import cn.twopair.persistence.aof.AofFile;
+import cn.twopair.persistence.aof.AofPersistence;
 import cn.twopair.resp.Errors;
 import cn.twopair.resp.Resp;
 import cn.twopair.resp.RespArray;
@@ -31,9 +31,9 @@ public class CommandHandler extends SimpleChannelInboundHandler<Resp> {
 	private static final Logger LOGGER = LoggerFactory.getLogger(CommandHandler.class);
 
 	/**
-	 * AOF文件；为null表示当前服务未启用AOF。
+	 * AOF持久化协调器；为null表示当前服务未启用AOF。
 	 */
-	private final AofFile aofFile;
+	private final AofPersistence aofPersistence;
 
 	/**
 	 * 所有客户端连接共享的 Redis 核心存储。
@@ -52,12 +52,12 @@ public class CommandHandler extends SimpleChannelInboundHandler<Resp> {
 	/**
 	 * 创建启用AOF的命令处理器。
 	 *
-	 * @param redisCore 所有连接共享的Redis核心存储
-	 * @param aofFile   用于记录成功写命令的AOF文件
+	 * @param redisCore     所有连接共享的Redis核心存储
+	 * @param aofPersistence 所有连接共享的AOF持久化协调器
 	 */
-	public CommandHandler(RedisCore redisCore, AofFile aofFile) {
+	public CommandHandler(RedisCore redisCore, AofPersistence aofPersistence) {
 		this.redisCore = redisCore;
-		this.aofFile = aofFile;
+		this.aofPersistence = aofPersistence;
 	}
 
 	/**
@@ -207,12 +207,10 @@ public class CommandHandler extends SimpleChannelInboundHandler<Resp> {
 	}
 
 	/**
-	 * Handles exceptions that occur during the handling of channel events. This method processes the root cause of the
-	 * exception, determines an appropriate error message, and sends a protocol-specific error response back to the client
-	 * before closing the connection.
+	 * 处理 Pipeline 传播的异常，向客户端返回 RESP 错误后关闭连接。
 	 *
-	 * @param ctx   the {@code ChannelHandlerContext} for interacting with the pipeline and sending responses to the client
-	 * @param cause the {@code Throwable} representing the exception that was caught during processing
+	 * @param ctx 当前连接的上下文
+	 * @param cause 捕获到的异常
 	 */
 	@Override
 	public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) {
@@ -266,32 +264,27 @@ public class CommandHandler extends SimpleChannelInboundHandler<Resp> {
 	 * @throws IOException 当AOF写入失败时抛出
 	 */
 	private Resp executeCommand(Command command, RespArray originalCommand) throws IOException {
-		if (aofFile == null || !(command instanceof WriteCommand writeCommand)) {
+		if (aofPersistence == null || !(command instanceof WriteCommand writeCommand)) {
 			return command.handle(redisCore);
 		}
 
 		/*
-		 * 所有CommandHandler共享同一个AofFile，因此可以把它作为写锁。
-		 * 锁内同时完成内存修改和AOF追加，防止其他连接插入写命令。
+		 * 内存修改和AOF追加必须使用同一个全局锁，防止多个连接的内存修改顺序与AOF命令顺序不一致。
 		 */
-		synchronized (aofFile) {
+		synchronized (aofPersistence) {
 			Resp response = command.handle(redisCore);
-
-			List<RespArray> aofCommands =
-					writeCommand.toAofCommands(originalCommand, redisCore);
-			aofFile.appendAll(aofCommands);
-
+			List<RespArray> aofCommands = writeCommand.toAofCommands(originalCommand, redisCore);
+			aofPersistence.appendAll(aofCommands);
 			return response;
 		}
 	}
 
 	/**
-	 * Writes an error message to the client using RESP (Redis Serialization Protocol) format.
-	 * The error message will be encoded into a RESP error starting with a '-' prefix.
+	 * 将错误信息包装成 RESP 错误响应并写回客户端。
 	 *
-	 * @param ctx     the {@code ChannelHandlerContext} used to write the error response back to the client
-	 * @param message the error message content to be sent to the client
-	 * @return a {@code ChannelFuture} representing the asynchronous operation of writing and flushing the error message
+	 * @param ctx 当前连接的上下文
+	 * @param message 返回给客户端的错误信息
+	 * @return 异步写出错误响应的结果
 	 */
 	private ChannelFuture writeError(ChannelHandlerContext ctx, String message) {
 		// Errors 会由 RespEncoder 编码成以 '-' 开头的 RESP 错误。
