@@ -24,20 +24,20 @@ public class RedisCoreImpl implements RedisCore {
 	/**
 	 * 提供当前毫秒时间。
 	 *
-	 * <p>生产环境使用 {@code System.currentTimeMillis}，
+	 * <p>生产环境使用{@link System#currentTimeMillis() 当前毫秒时间方法}，
 	 * 测试环境可以注入可控时间。
 	 */
 	private final LongSupplier currentTimeMillis;
 
 	/**
-	 * 创建使用系统时间的 {@link RedisCore} 实现。
+	 * 创建使用系统时间的 {@link RedisCore Redis核心存储}实现。
 	 */
 	public RedisCoreImpl() {
 		this(System::currentTimeMillis);
 	}
 
 	/**
-	 * 创建使用指定时间源的 {@link RedisCore} 实现。
+	 * 创建使用指定时间源的 {@link RedisCore Redis核心存储}实现。
 	 *
 	 * @param currentTimeMillis 提供当前毫秒时间的时间源，不能为 {@code null}
 	 */
@@ -798,7 +798,7 @@ public class RedisCoreImpl implements RedisCore {
 	/**
 	 * 获取当前所有未过期key的弱一致性快照。
 	 *
-	 * <p>{@code ConcurrentHashMap}的遍历不会阻塞并发读写，因此扫描期间新增或删除的key
+	 * <p>{@link ConcurrentHashMap 并发哈希表}的遍历不会阻塞并发读写，因此扫描期间新增或删除的key
 	 * 不保证一定出现在本次结果中，这与Redis SCAN的弱一致性语义相符。</p>
 	 *
 	 * @return 按字节顺序排列的有效key列表

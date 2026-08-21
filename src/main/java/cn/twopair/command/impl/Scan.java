@@ -146,7 +146,7 @@ public class Scan implements Command {
 	 *
 	 * @param nextCursor 下一页游标，0表示扫描结束
 	 * @param keys       本页key
-	 * @return RESP数组响应
+	 * @return {@link RespArray RESP数组}响应
 	 */
 	private RespArray response(long nextCursor, List<BytesWrapper> keys) {
 		Resp[] keyArray = new Resp[keys.size()];
@@ -161,9 +161,9 @@ public class Scan implements Command {
 	}
 
 	/**
-	 * 将BulkString转换成UTF-8文本。
+	 * 将{@link BulkString 块字符串}转换成UTF-8文本。
 	 *
-	 * @param resp BulkString参数
+	 * @param resp {@link BulkString 块字符串}参数
 	 * @return UTF-8文本
 	 */
 	private String text(Resp resp) {

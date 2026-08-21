@@ -32,10 +32,10 @@ public final class AofReplay {
 	}
 
 	/**
-	 * 将AOF文件中的命令重放到指定RedisCore。
+	 * 将AOF文件中的命令重放到指定{@link RedisCore Redis核心存储}。
 	 *
 	 * @param path      AOF文件路径
-	 * @param redisCore 需要恢复数据的Redis核心存储
+	 * @param redisCore 需要恢复数据的{@link RedisCore Redis核心存储}
 	 * @return 成功重放的命令数量
 	 * @throws IOException           当AOF文件读取失败时抛出
 	 * @throws IllegalStateException 当AOF内容非法或不是RESP数组时抛出

@@ -28,15 +28,15 @@ public class CommandFactory {
 	 * 命令注册表。
 	 *
 	 * <p>key 是 Redis 命令名，例如 {@code PING}、{@code SET}、{@code GET}。
-	 * value 是 {@code Command} 的创建器，而不是 {@code Command} 实例本身。
+	 * value 是 {@link Command 命令接口}的创建器，而不是 {@link Command 命令接口}实例本身。
 	 *
-	 * <p>这里使用 {@code Supplier} 的原因：
+	 * <p>这里使用 {@link Supplier 对象提供器}的原因：
 	 * <ol>
-	 *     <li>每次解析请求时都通过 {@code Supplier#get()} 创建新的 {@code Command} 对象；</li>
-	 *     <li>{@code Command} 会通过 {@code setContent(array)} 保存本次请求参数，属于有状态对象；</li>
-	 *     <li>如果 {@code Map} 中直接保存 {@code Command} 实例，不同请求会复用同一个对象，导致参数被覆盖；</li>
-	 *     <li>在并发请求下，复用同一个 {@code Command} 实例还可能造成线程安全问题；</li>
-	 *     <li>使用 {@code Supplier} 可以替代大量 {@code if-else} / {@code switch}，新增命令时只需要注册一行。</li>
+	 *     <li>每次解析请求时都通过 {@link Supplier#get() 获取对象方法}创建新的 {@link Command 命令接口}对象；</li>
+	 *     <li>{@link Command 命令接口}会通过 {@link Command#setContent(Resp[]) 参数注入方法}保存本次请求参数，属于有状态对象；</li>
+	 *     <li>如果 {@link Map 命令映射表}中直接保存 {@link Command 命令接口}实例，不同请求会复用同一个对象，导致参数被覆盖；</li>
+	 *     <li>在并发请求下，复用同一个 {@link Command 命令接口}实例还可能造成线程安全问题；</li>
+	 *     <li>使用 {@link Supplier 对象提供器}可以替代大量 {@code if-else} / {@code switch}，新增命令时只需要注册一行。</li>
 	 * </ol>
 	 */
 	private static final Map<String, Supplier<Command>> COMMAND_MAP = new HashMap<>();
@@ -112,9 +112,9 @@ public class CommandFactory {
 	/**
 	 * 校验 RESP 数组首元素并将其解析为命令名。
 	 *
-	 * @param array 客户端发送的 RESP 数组，首元素必须是 {@link BulkString}
+	 * @param array 客户端发送的 RESP 数组，首元素必须是 {@link BulkString 块字符串}
 	 * @return 转换为大写后的 UTF-8 命令名
-	 * @throws IllegalArgumentException 当首元素不是 {@link BulkString}，
+	 * @throws IllegalArgumentException 当首元素不是 {@link BulkString 块字符串}，
 	 *                                  或命令名为 {@code null}、空内容时抛出
 	 */
 	private static String validateAndGetCommandName(Resp[] array) {

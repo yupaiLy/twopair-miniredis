@@ -37,11 +37,11 @@ public class BgRewriteAof implements AofManagementCommand {
 	}
 
 	/**
-	 * 启动后台AOF Rewrite任务。
+	 * 通过{@link AofPersistence#rewriteAsync(RedisCore) 异步重写方法}启动后台AOF Rewrite任务。
 	 *
-	 * @param redisCore Redis内存数据库
-	 * @param aofPersistence AOF持久化协调器；未启用AOF时为 {@code null}
-	 * @return Rewrite启动结果
+	 * @param redisCore {@link RedisCore Redis核心存储}
+	 * @param aofPersistence {@link AofPersistence AOF持久化协调器}；未启用AOF时为 {@code null}
+	 * @return {@link Resp RESP响应}形式的Rewrite启动结果
 	 */
 	@Override
 	public Resp handle(RedisCore redisCore, AofPersistence aofPersistence) {

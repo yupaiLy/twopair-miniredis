@@ -32,9 +32,9 @@ public final class AofRewriteCommandBuilder {
 	 * <p>当前支持String、List、Hash和Set类型。带过期时间的数据会在数据恢复命令后追加PEXPIREAT，
 	 * 使用绝对毫秒时间可以避免AOF重放时重新计算TTL。
 	 *
-	 * @param redisCore Redis核心存储
+	 * @param redisCore {@link RedisCore Redis核心存储}
 	 * @return 按key字节顺序排列的AOF恢复命令
-	 * @throws NullPointerException  redisCore为null时抛出
+	 * @throws NullPointerException  redisCore为 {@code null} 时抛出
 	 * @throws IllegalStateException 遇到当前尚未支持的数据类型时抛出
 	 */
 	public static List<RespArray> build(RedisCore redisCore) {
@@ -146,11 +146,11 @@ public final class AofRewriteCommandBuilder {
 	}
 
 	/**
-	 * 构造一条由BulkString组成的RESP数组命令。
+	 * 构造一条由{@link BulkString 块字符串}组成的{@link RespArray RESP数组}命令。
 	 *
 	 * @param commandName 命令名称
 	 * @param arguments   命令参数
-	 * @return RESP数组命令
+	 * @return {@link RespArray RESP数组}命令
 	 */
 	private static RespArray command(String commandName, BytesWrapper... arguments) {
 		Resp[] array = new Resp[arguments.length + 1];
@@ -164,10 +164,10 @@ public final class AofRewriteCommandBuilder {
 	}
 
 	/**
-	 * 创建二进制安全的BulkString快照。
+	 * 创建二进制安全的{@link BulkString 块字符串}快照。
 	 *
 	 * @param value 原始字节内容
-	 * @return 不共享原始字节数组的BulkString
+	 * @return 不共享原始字节数组的{@link BulkString 块字符串}
 	 */
 	private static BulkString bulkString(BytesWrapper value) {
 		Objects.requireNonNull(value, "AOF Rewrite参数不能为空");

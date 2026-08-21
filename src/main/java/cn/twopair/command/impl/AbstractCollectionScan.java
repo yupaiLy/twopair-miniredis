@@ -102,7 +102,7 @@ public abstract class AbstractCollectionScan<T> implements Command {
 	 *
 	 * <p>基类负责MATCH过滤和游标分页，子类只需返回目标集合的完整快照。
 	 *
-	 * @param redisCore Redis核心存储
+	 * @param redisCore {@link RedisCore Redis核心存储}
 	 * @param key       需要扫描的key
 	 * @return 按固定顺序排列的全量条目
 	 */
@@ -117,10 +117,10 @@ public abstract class AbstractCollectionScan<T> implements Command {
 	protected abstract String getMatchText(T item);
 
 	/**
-	 * 将条目编码为RESP响应元素。
+	 * 将条目编码为{@link Resp RESP响应}元素。
 	 *
 	 * @param item 需要编码的条目
-	 * @return 该条目对应的RESP对象数组，例如Hash条目返回field和value两个元素
+	 * @return 该条目对应的{@link Resp RESP响应}对象数组，例如Hash条目返回field和value两个元素
 	 */
 	protected abstract Resp[] encodeItem(T item);
 
@@ -129,7 +129,7 @@ public abstract class AbstractCollectionScan<T> implements Command {
 	 *
 	 * @param nextCursor 下一次扫描使用的游标，0表示本轮遍历结束
 	 * @param items      当前页需要返回的条目
-	 * @return 包含下一游标和当前页数据的RESP数组
+	 * @return 包含下一游标和当前页数据的{@link RespArray RESP数组}
 	 */
 	private RespArray response(long nextCursor, List<T> items) {
 		List<Resp> encodedItems = new ArrayList<>();
@@ -187,9 +187,9 @@ public abstract class AbstractCollectionScan<T> implements Command {
 	}
 
 	/**
-	 * 将已校验的BulkString参数转换为UTF-8文本。
+	 * 将已校验的{@link BulkString 块字符串}参数转换为UTF-8文本。
 	 *
-	 * @param resp 已校验为非空BulkString的RESP参数
+	 * @param resp 已校验为非空{@link BulkString 块字符串}的{@link Resp RESP参数}
 	 * @return 参数的UTF-8文本
 	 */
 	private String text(Resp resp) {

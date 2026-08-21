@@ -12,11 +12,11 @@ import cn.twopair.resp.Resp;
 public interface AofManagementCommand extends Command {
 
 	/**
-	 * 使用Redis内存数据库和AOF持久化协调器执行命令。
+	 * 使用{@link RedisCore Redis核心存储}和{@link AofPersistence AOF持久化协调器}执行命令。
 	 *
-	 * @param redisCore Redis内存数据库
-	 * @param aofPersistence AOF持久化协调器；未启用AOF时为 {@code null}
-	 * @return RESP命令响应
+	 * @param redisCore {@link RedisCore Redis核心存储}
+	 * @param aofPersistence {@link AofPersistence AOF持久化协调器}；未启用AOF时为 {@code null}
+	 * @return {@link Resp RESP命令响应}
 	 */
 	Resp handle(RedisCore redisCore, AofPersistence aofPersistence);
 

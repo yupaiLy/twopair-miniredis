@@ -31,19 +31,19 @@ public class CommandHandler extends SimpleChannelInboundHandler<Resp> {
 	private static final Logger LOGGER = LoggerFactory.getLogger(CommandHandler.class);
 
 	/**
-	 * AOF持久化协调器；为 {@code null} 表示当前服务未启用AOF。
+	 * {@link AofPersistence AOF持久化协调器}；为 {@code null} 表示当前服务未启用AOF。
 	 */
 	private final AofPersistence aofPersistence;
 
 	/**
-	 * 所有客户端连接共享的 Redis 核心存储。
+	 * 所有客户端连接共享的{@link RedisCore Redis核心存储}。
 	 */
 	private final RedisCore redisCore;
 
 	/**
 	 * 创建未启用AOF的命令处理器。
 	 *
-	 * @param redisCore 所有连接共享的Redis核心存储
+	 * @param redisCore 所有连接共享的{@link RedisCore Redis核心存储}
 	 */
 	public CommandHandler(RedisCore redisCore) {
 		this(redisCore, null);
@@ -52,8 +52,8 @@ public class CommandHandler extends SimpleChannelInboundHandler<Resp> {
 	/**
 	 * 创建启用AOF的命令处理器。
 	 *
-	 * @param redisCore     所有连接共享的Redis核心存储
-	 * @param aofPersistence 所有连接共享的AOF持久化协调器
+	 * @param redisCore      所有连接共享的{@link RedisCore Redis核心存储}
+	 * @param aofPersistence 所有连接共享的{@link AofPersistence AOF持久化协调器}
 	 */
 	public CommandHandler(RedisCore redisCore, AofPersistence aofPersistence) {
 		this.redisCore = redisCore;
@@ -303,7 +303,7 @@ public class CommandHandler extends SimpleChannelInboundHandler<Resp> {
 	}
 
 	/**
-	 * 获取客户端远端地址，{@code EmbeddedChannel} 等测试连接没有地址时返回 {@code unknown}。
+	 * 获取客户端远端地址，{@link io.netty.channel.embedded.EmbeddedChannel 嵌入式通道}等测试连接没有地址时返回 {@code unknown}。
 	 *
 	 * @param ctx 当前连接上下文
 	 * @return 远端地址文本

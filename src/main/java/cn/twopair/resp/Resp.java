@@ -15,12 +15,12 @@ public interface Resp {
 	/**
 	 * 将 RESP 对象编码为字节并写入指定缓冲区。
 	 *
-	 * <p>支持 {@link SimpleString}、{@link Errors}、{@link RespInt}、
-	 * {@link BulkString} 和 {@link RespArray} 五种类型，
+	 * <p>支持 {@link SimpleString 简单字符串}、{@link Errors 错误响应}、{@link RespInt 整数响应}、
+	 * {@link BulkString 块字符串}和 {@link RespArray RESP数组}五种类型，
 	 * 按RESP协议规则序列化为对应的字节表示。
 	 *
 	 * @param resp   需要编码的RESP对象
-	 * @param buffer 接收编码结果的 {@code ByteBuf} 缓冲区
+	 * @param buffer 接收编码结果的{@link ByteBuf 字节缓冲区}
 	 * @throws IllegalStateException 当RESP对象类型不受支持时抛出
 	 */
 	static void encode(Resp resp, ByteBuf buffer) {
@@ -89,7 +89,7 @@ public interface Resp {
 	 * 并返回 {@code null}。
 	 *
 	 * @param buffer 包含待解码 RESP 数据的缓冲区，不能为 {@code null}
-	 * @return 如果存在完整消息，则返回解码后的 {@code Resp} 对象；如果消息不完整，则返回 {@code null}
+	 * @return 如果存在完整消息，则返回解码后的{@link Resp RESP对象}；如果消息不完整，则返回 {@code null}
 	 */
 	static Resp tryDecode(ByteBuf buffer) {
 		// 记录当前读取位置，半包时必须回到这里重新解析。
@@ -218,7 +218,7 @@ public interface Resp {
 	 * @param typeName 出错时用于提示的类型名称
 	 * @return 转换后的长度，-1表示空值
 	 * @throws RespIncompleteException 数据尚未包含完整长度及CRLF时抛出
-	 * @throws IllegalStateException    长度不是整数、小于-1或超过 {@code Integer.MAX_VALUE} 时抛出
+	 * @throws IllegalStateException    长度不是整数、小于-1或超过{@link Integer#MAX_VALUE int最大值}时抛出
 	 */
 	private static int getLength(ByteBuf buffer, String typeName) {
 		long length = getNumber(buffer);

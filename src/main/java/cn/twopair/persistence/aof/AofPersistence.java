@@ -28,7 +28,7 @@ public final class AofPersistence implements AutoCloseable {
 	private final Path path;
 
 	/**
-	 * 当前正在接收追加命令的AOF存储。
+	 * 当前正在接收追加命令的{@link AofStorage AOF存储接口}。
 	 *
 	 * <p>Rewrite成功后需要关闭旧存储并切换到新文件，因此不能声明为final。
 	 */
@@ -61,7 +61,7 @@ public final class AofPersistence implements AutoCloseable {
 	 * 使用指定文件和刷盘策略创建AOF持久化协调器。
 	 *
 	 * @param path   AOF文件路径
-	 * @param policy AOF刷盘策略
+	 * @param policy {@link AofFsyncPolicy AOF刷盘策略}
 	 * @throws NullPointerException path或policy为 {@code null} 时抛出
 	 * @throws IOException AOF文件打开失败时抛出
 	 */
@@ -74,8 +74,8 @@ public final class AofPersistence implements AutoCloseable {
 	 *
 	 * <p>测试替身没有真实文件路径，因此不能执行AOF Rewrite。
 	 *
-	 * @param storage             AOF底层存储
-	 * @param policy              AOF刷盘策略
+	 * @param storage             {@link AofStorage AOF存储接口}
+	 * @param policy              {@link AofFsyncPolicy AOF刷盘策略}
 	 * @param fsyncIntervalMillis 后台刷盘间隔，单位为毫秒
 	 * @throws NullPointerException     storage或policy为 {@code null} 时抛出
 	 * @throws IllegalArgumentException 刷盘间隔小于等于0时抛出
@@ -87,9 +87,9 @@ public final class AofPersistence implements AutoCloseable {
 	/**
 	 * 使用完整配置创建AOF持久化协调器。
 	 *
-	 * @param storage AOF底层存储
+	 * @param storage {@link AofStorage AOF存储接口}
 	 * @param path 正式AOF文件路径；测试替身可以为 {@code null}
-	 * @param policy AOF刷盘策略
+	 * @param policy {@link AofFsyncPolicy AOF刷盘策略}
 	 * @param fsyncIntervalMillis 后台刷盘间隔，单位为毫秒
 	 * @throws NullPointerException storage或policy为 {@code null} 时抛出
 	 * @throws IllegalArgumentException 刷盘间隔小于等于0时抛出
@@ -124,7 +124,7 @@ public final class AofPersistence implements AutoCloseable {
 	/**
 	 * 按照当前刷盘策略追加一批AOF命令。
 	 *
-	 * <p>ALWAYS策略在追加后立即刷盘；EVERYSEC策略只追加，
+	 * <p>{@link AofFsyncPolicy#ALWAYS ALWAYS策略}在追加后立即刷盘；{@link AofFsyncPolicy#EVERYSEC EVERYSEC策略}只追加，
 	 * 由后台任务定期执行刷盘。
 	 *
 	 * @param commands 需要追加的AOF命令
@@ -163,7 +163,7 @@ public final class AofPersistence implements AutoCloseable {
 	 *
 	 * <p>该方法只负责提交后台任务，不在调用线程执行文件写入。已经存在Rewrite任务时不会重复提交。
 	 *
-	 * @param redisCore Redis内存数据库
+	 * @param redisCore {@link RedisCore Redis核心存储}
 	 * @return 成功提交任务时返回 {@code true}，已有任务运行时返回 {@code false}
 	 * @throws NullPointerException  redisCore为 {@code null} 时抛出
 	 * @throws IllegalStateException 协调器已关闭、没有真实AOF路径或后台任务无法提交时抛出
@@ -203,7 +203,7 @@ public final class AofPersistence implements AutoCloseable {
 	/**
 	 * 在后台线程生成并写入新的AOF文件。
 	 *
-	 * @param redisCore Redis内存数据库
+	 * @param redisCore {@link RedisCore Redis核心存储}
 	 */
 	private void runRewrite(RedisCore redisCore) {
 		try (AofRewriteFile rewriteFile = new AofRewriteFile(path)) {
@@ -235,7 +235,7 @@ public final class AofPersistence implements AutoCloseable {
 	/**
 	 * 将Rewrite期间产生的增量命令追加到临时文件，并切换正式AOF文件。
 	 *
-	 * @param rewriteFile 已经写入内存快照的Rewrite临时文件
+	 * @param rewriteFile 已经写入内存快照的{@link AofRewriteFile AOF重写临时文件}
 	 * @throws IOException 增量写入、文件替换或新AOF文件打开失败时抛出
 	 */
 	private synchronized void finishRewrite(AofRewriteFile rewriteFile) throws IOException {
@@ -266,10 +266,10 @@ public final class AofPersistence implements AutoCloseable {
 	}
 
 	/**
-	 * 执行一次EVERYSEC后台刷盘。
+	 * 执行一次{@link AofFsyncPolicy#EVERYSEC EVERYSEC策略}后台刷盘。
 	 *
 	 * <p>后台异常必须在这里捕获并保存，否则周期任务抛出异常后，
-	 * ScheduledExecutorService将停止后续调度。
+	 * {@link ScheduledExecutorService 定时任务执行器}将停止后续调度。
 	 */
 	private synchronized void runBackgroundForce() {
 		if (closed || !dirty) {
@@ -288,7 +288,7 @@ public final class AofPersistence implements AutoCloseable {
 	/**
 	 * 关闭AOF持久化协调器及其后台线程。
 	 *
-	 * <p>关闭前会执行最后一次刷盘，确保EVERYSEC尚未同步的数据
+	 * <p>关闭前会执行最后一次刷盘，确保{@link AofFsyncPolicy#EVERYSEC EVERYSEC策略}尚未同步的数据
 	 * 尽可能写入磁盘。重复调用不会重复关闭底层资源。
 	 *
 	 * @throws IOException 最终刷盘或底层存储关闭失败时抛出
@@ -338,8 +338,8 @@ public final class AofPersistence implements AutoCloseable {
 	 * 校验刷盘策略并打开指定的AOF文件。
 	 *
 	 * @param path   AOF文件路径
-	 * @param policy AOF刷盘策略
-	 * @return 已打开的AOF底层存储
+	 * @param policy {@link AofFsyncPolicy AOF刷盘策略}
+	 * @return 已打开的{@link AofStorage AOF存储接口}
 	 * @throws NullPointerException path或policy为 {@code null} 时抛出
 	 * @throws IOException AOF文件打开失败时抛出
 	 */

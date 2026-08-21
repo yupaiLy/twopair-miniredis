@@ -55,7 +55,7 @@ public class Get implements Command {
 	 * 读取key对应的String值。
 	 *
 	 * @param redisCore Redis核心存储
-	 * @return 字符串值；key不存在时返回 {@link BulkString#NIL}
+	 * @return 字符串值；key不存在时返回 {@link BulkString#NIL 空块字符串}
 	 * @throws WrongTypeException key存在但不是String时抛出
 	 */
 	@Override

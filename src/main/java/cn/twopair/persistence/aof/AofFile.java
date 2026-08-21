@@ -70,7 +70,7 @@ public final class AofFile implements AofStorage {
 	 * 将一批命令编码后一次性追加到AOF文件。
 	 *
 	 * <p>该方法只负责写入，不主动执行强制刷盘。
-	 * 调用方根据AOF策略决定何时调用 {@code force()}。
+	 * 调用方根据AOF策略决定何时调用{@link AofFile#force() AOF刷盘方法}。
 	 *
 	 * @param commands 需要按顺序持久化的命令列表
 	 * @throws NullPointerException commands或其中任意命令为 {@code null} 时抛出
@@ -112,7 +112,7 @@ public final class AofFile implements AofStorage {
 	/**
 	 * 将已经写入操作系统文件缓存的AOF内容强制刷入磁盘。
 	 *
-	 * <p>参数使用 {@code force(false)}，表示只要求同步文件内容，不强制同步文件元数据。
+	 * <p>调用{@link FileChannel#force(boolean) 文件强制刷盘方法}时传入 {@code false}，表示只要求同步文件内容，不强制同步文件元数据。
 	 *
 	 * @throws IOException 当刷盘失败时抛出
 	 */

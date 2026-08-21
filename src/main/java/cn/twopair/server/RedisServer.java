@@ -266,7 +266,7 @@ public class RedisServer implements AutoCloseable {
 	}
 
 	/**
-	 * 停止服务，语义上等价于 {@link #close()}。
+	 * 停止服务，语义上等价于{@link RedisServer#close() 关闭服务方法}。
 	 */
 	public void stop() {
 		close();
