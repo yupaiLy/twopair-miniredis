@@ -23,12 +23,21 @@ public class RespDecoder extends ByteToMessageDecoder {
 	 */
 	@Override
 	protected void decode(ChannelHandlerContext ctx, ByteBuf in, List<Object> out) {
-		// tryDecode 会在半包时回滚 readerIndex 并返回 null。
-		Resp resp = Resp.tryDecode(in);
+		try {
+			// tryDecode会在TCP半包时回滚readerIndex并返回null。
+			Resp resp = Resp.tryDecode(in);
 
-		// 只有完整 RESP 才能进入后续业务 Handler。
-		if (resp != null) {
-			out.add(resp);
+			// 只有完整RESP才能进入后续业务Handler。
+			if (resp != null) {
+				out.add(resp);
+			}
+		} catch (RuntimeException e) {
+			/*
+			 * 协议已经损坏，当前连接随后会被关闭。
+			 * 丢弃剩余字节，避免关闭连接时decodeLast再次解析残留数据。
+			 */
+			in.skipBytes(in.readableBytes());
+			throw e;
 		}
 	}
 }

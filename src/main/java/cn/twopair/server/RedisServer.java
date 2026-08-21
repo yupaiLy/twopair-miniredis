@@ -5,9 +5,6 @@ import cn.twopair.core.impl.RedisCoreImpl;
 import cn.twopair.persistence.aof.AofFsyncPolicy;
 import cn.twopair.persistence.aof.AofPersistence;
 import cn.twopair.persistence.aof.AofReplay;
-import cn.twopair.server.codec.RespDecoder;
-import cn.twopair.server.codec.RespEncoder;
-import cn.twopair.server.handler.CommandHandler;
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.channel.*;
 import io.netty.channel.nio.NioIoHandler;
@@ -207,14 +204,7 @@ public class RedisServer implements AutoCloseable {
 					.childHandler(new ChannelInitializer<SocketChannel>() {
 						@Override
 						protected void initChannel(SocketChannel channel) {
-							/*
-							 * 入站：RespDecoder -> CommandHandler。
-							 * 出站由 CommandHandler 向前传播：CommandHandler -> RespEncoder。
-							 */
-							channel.pipeline()
-									.addLast(new RespDecoder())
-									.addLast(new RespEncoder())
-									.addLast(new CommandHandler(redisCore, aofPersistence));
+							RedisPipeline.configure(channel.pipeline(), redisCore, aofPersistence);
 						}
 					});
 

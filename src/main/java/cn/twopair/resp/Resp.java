@@ -84,12 +84,12 @@ public interface Resp {
 	}
 
 	/**
-	 * Attempts to decode a RESP (REdis Serialization Protocol) message from the provided buffer.
-	 * In the case of incomplete data (half-packet), the buffer's read position is reset to allow for
-	 * reparsing upon receiving more data.
+	 * 尝试从给定缓冲区中解码 RESP（Redis Serialization Protocol）消息。
+	 * 如果缓冲区中的数据不足以组成一条完整的 RESP 消息，则将缓冲区的读索引重置到原始位置，
+	 * 并返回 {@code null}。
 	 *
-	 * @param buffer the buffer containing the serialized RESP message
-	 * @return the decoded {@code Resp} object, or {@code null} if the buffer contains incomplete data
+	 * @param buffer 包含待解码 RESP 数据的缓冲区，不能为 {@code null}
+	 * @return 如果存在完整消息，则返回解码后的 {@code Resp} 对象；如果消息不完整，则返回 {@code null}
 	 */
 	static Resp tryDecode(ByteBuf buffer) {
 		// 记录当前读取位置，半包时必须回到这里重新解析。
