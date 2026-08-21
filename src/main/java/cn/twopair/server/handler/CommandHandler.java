@@ -1,5 +1,6 @@
 package cn.twopair.server.handler;
 
+import cn.twopair.command.AofManagementCommand;
 import cn.twopair.command.Command;
 import cn.twopair.command.CommandFactory;
 import cn.twopair.command.WriteCommand;
@@ -260,6 +261,10 @@ public class CommandHandler extends SimpleChannelInboundHandler<Resp> {
 	 * @throws IOException 当AOF写入失败时抛出
 	 */
 	private Resp executeCommand(Command command, RespArray originalCommand) throws IOException {
+		if (command instanceof AofManagementCommand aofManagementCommand) {
+			return aofManagementCommand.handle(redisCore, aofPersistence);
+		}
+
 		if (aofPersistence == null || !(command instanceof WriteCommand writeCommand)) {
 			return command.handle(redisCore);
 		}

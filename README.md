@@ -1,6 +1,6 @@
 # twopair-miniredis
 
-用 **Java 17 + Netty 从零实现的迷你 Redis**：不使用现成 Redis 客户端/服务端实现，也不使用 Netty 内置 Redis 编解码器，手写 RESP 协议解析、命令分发、String/List/Hash/Set 四种数据结构、TTL 过期与 AOF 持久化，可直接用官方 `redis-cli` 连接使用。
+用 **Java 17 + Netty 从零实现的迷你 Redis**：不使用现成 Redis 客户端/服务端实现，也不使用 Netty 内置 Redis 编解码器，手写 RESP 协议解析、命令分发、String/List/Hash/Set 四种数据结构、TTL 过期、AOF 持久化与后台 Rewrite，可直接用官方 `redis-cli` 连接使用。
 
 ## 这个项目解决什么问题
 
@@ -10,8 +10,9 @@ Redis 是后端工程师每天都在用的基础设施，但多数人只停留�
 - 一条 `SET key value` 从字节流进来到字节流出，中间经过哪些环节？**Reactor 网络模型**怎样组织这些环节？
 - 内存字典 + 过期时间如何设计，才能在**并发访问**下正确实现惰性删除与周期删除，不误删刚写入的新值？
 - 写命令如何既改内存又落盘，支持**重启恢复、TTL 不重新计时**，并在文件尾部出现半条命令时安全修复？
+- AOF 持续增长时，如何从内存生成最小恢复命令，并在后台 Rewrite 期间保证并发写不丢失？
 
-它是教学向的"轮子"：功能上是 Redis 的一个可用子集，实现上优先选择**最小、清晰、可验证**的方案（例如 AOF 先做同步刷盘而非异步缓冲），每个阶段的取舍都记录在 [blogs/](blogs/) 中。
+它是教学向的"轮子"：功能上是 Redis 的一个可用子集，实现上优先选择**最小、清晰、可验证**的方案，再通过测试和性能数据逐步优化，每个阶段的取舍都记录在 [blogs/](blogs/) 中。
 
 ## 技术栈
 
@@ -70,7 +71,7 @@ redis-cli 发送 *2\r\n$3\r\nGET\r\n$3\r\nkey\r\n
 
 关键代码入口：[`RedisServer`](src/main/java/cn/twopair/server/RedisServer.java)（启动与 Pipeline 组装）、[`CommandHandler`](src/main/java/cn/twopair/server/handler/CommandHandler.java)（分发与异常分层）、[`CommandFactory`](src/main/java/cn/twopair/command/CommandFactory.java)（命令注册表）。
 
-## 已支持命令（25 个）
+## 已支持命令（29 个）
 
 | 分类 | 命令 | 说明 | 写命令（入 AOF） |
 |---|---|---|---|
@@ -87,9 +88,12 @@ redis-cli 发送 *2\r\n$3\r\nGET\r\n$3\r\nkey\r\n
 | 键 | `SCAN cursor [MATCH p] [COUNT n]` | 游标分页 + MATCH 过滤 | |
 | List | `LPUSH key v [v ...]` | 头部插入 | ✔ |
 | List | `LPOP key` | 头部弹出，空列表自动删 key | ✔ |
+| List | `RPUSH key v [v ...]` | 尾部插入 | ✔ |
+| List | `RPOP key` | 尾部弹出，空列表自动删 key | ✔ |
 | List | `LLEN key` | | |
 | List | `LRANGE key start stop` | 支持负数下标 | |
 | Hash | `HSET key f v [f v ...]` | 返回新增字段数 | ✔ |
+| Hash | `HMSET key f v [f v ...]` | 兼容官方历史命令，返回 OK | ✔ |
 | Hash | `HGET key f` | | |
 | Hash | `HDEL key f [f ...]` | 空 Hash 自动删 key | ✔ |
 | Hash | `HLEN key` | | |
@@ -99,6 +103,7 @@ redis-cli 发送 *2\r\n$3\r\nGET\r\n$3\r\nkey\r\n
 | Set | `SISMEMBER key m` | | |
 | Set | `SCARD key` | | |
 | Set | `SSCAN key cursor [MATCH p] [COUNT n]` | | |
+| 管理 | `BGREWRITEAOF` | 后台生成最小 AOF 并原子替换 | |
 
 类型不匹配时返回标准 `WRONGTYPE Operation against a key holding the wrong kind of value`；未知命令返回 `ERR 不支持的命令: XXX`。
 
@@ -137,6 +142,7 @@ redis-cli 发送 *2\r\n$3\r\nGET\r\n$3\r\nkey\r\n
 - **可配置刷盘**：`ALWAYS` 每批命令追加后立即 `force(false)`；`EVERYSEC` 只在请求线程追加文件，由独立的 `redis-aof-fsync` 线程每秒检查并刷入新增数据，避免每条写命令都在 Netty EventLoop 上等待磁盘，也避免空闲时无意义刷盘。
 - **TTL 不重新计时**：`SETEX`/`EXPIRE` 落盘前由 `WriteCommand.toAofCommands()` 重写为 `SET` + `PEXPIREAT 绝对时间戳`，重启重放后剩余 TTL 与宕机前连续。
 - **崩溃自愈**：启动时 [`AofReplay`](src/main/java/cn/twopair/persistence/aof/AofReplay.java) 在绑定端口**之前**重放全部命令；若文件末尾残留不完整命令（宕机写了一半），自动截断到最后一条完整命令后继续。
+- **后台 Rewrite**：`BGREWRITEAOF` 从当前内存状态生成 String/List/Hash/Set 与 TTL 的最小恢复命令，写入同目录临时文件；Rewrite 期间的新写命令进入增量缓冲区，最终刷盘并原子替换正式 AOF。
 
 ## 快速开始
 
@@ -190,6 +196,8 @@ demo:queue
 demo:session
 demo:tags
 demo:user:1
+$ redis-cli -p 6378 BGREWRITEAOF
+Background append only file rewriting started
 $ redis-cli -p 6378 DEL demo:name demo:queue demo:user:1 demo:tags demo:session
 5
 ```
@@ -216,7 +224,7 @@ $ redis-cli -p 6378 TTL demo:cache      # 绝对时间恢复，TTL 没有重新�
 
 ## 测试与性能
 
-**测试**：`mvn test` —— **168 个用例 / 43 个测试类，全部通过**。覆盖 RESP 编解码（含半包、非法输入）、四种数据结构、RedisCore 并发与过期语义、25 个命令的参数校验与执行、Netty EmbeddedChannel 集成测试、AOF 追加、刷盘策略与重放（含尾部截断）。
+**测试**：`mvn test` —— **208 个用例 / 51 个测试类，全部通过**。覆盖 RESP 编解码（含半包、非法输入）、四种数据结构、RedisCore 并发与过期语义、29 个命令、Netty EmbeddedChannel 集成、AOF 追加、刷盘、重放、尾部截断自愈、后台 Rewrite、增量命令与原子替换。
 
 **性能**（本机回环，`redis-benchmark -n 10000 -c 50 -d 64 -t set,get`，macOS Apple Silicon；同版本、同日志级别、全新临时AOF文件）：
 
@@ -233,12 +241,13 @@ $ redis-cli -p 6378 TTL demo:cache      # 绝对时间恢复，TTL 没有重新�
 
 - **无事务**（MULTI/EXEC/WATCH）、无 Lua 脚本
 - **无主从复制、无哨兵、无集群**；单节点，AOF 是唯一持久化手段
-- **无 RDB 快照**，无 AOF 重写（文件只增不减）；刷盘策略目前支持 `ALWAYS` 和 `EVERYSEC`，暂不支持 `NO`
+- **无 RDB 快照**；AOF Rewrite 使用 Java 进程内全局锁建立快照，不是官方 Redis 的 `fork + COW` 和多部分 AOF manifest 模式
+- AOF 刷盘策略目前支持 `ALWAYS` 和 `EVERYSEC`，暂不支持 `NO`
 - 单数据库，`SELECT` 仅兼容 `0`
 - `SET` 不支持 `EX/PX/NX/XX` 选项（TTL 请用 `SETEX`）
 - `SCAN/HSCAN/SSCAN` 使用快照、排序和下标游标实现，不是官方 Redis 的渐进式哈希桶遍历，不适合大数据量
 - 无阻塞命令（BLPOP/BRPOP）、发布订阅、ZSET/Bitmap/Stream 等结构
-- 无 `INFO/CONFIG/CLIENT` 等管理命令，无 AUTH 认证（请勿暴露到非信任网络）
+- 除 `BGREWRITEAOF` 外，无 `INFO/CONFIG/CLIENT` 等管理命令，无 AUTH 认证（请勿暴露到非信任网络）
 - 写路径仍通过全局锁保证内存修改顺序与AOF顺序一致；AOF失败时内存已修改但不会回滚，客户端会收到错误响应
 
 ## 延伸阅读
@@ -252,4 +261,6 @@ $ redis-cli -p 6378 TTL demo:cache      # 绝对时间恢复，TTL 没有重新�
 - [stage-06 AOF 持久化](blogs/stage-06-aof-persistence.md)
 - [stage-07 List、Hash、Set 与游标扫描](blogs/stage-07-data-structures.md)
 - [stage-08 AOF 刷盘策略与性能优化](blogs/stage-08-aof-performance.md)
+- [stage-09 Netty Pipeline 合并 Flush 性能优化](blogs/stage-09-netty-pipeline-performance.md)
+- [stage-10 AOF Rewrite 与 BGREWRITEAOF](blogs/stage-10-aof-rewrite.md)
 - [MiniRedis 性能测试报告](docs/benchmark-report-2026-08-20.md)

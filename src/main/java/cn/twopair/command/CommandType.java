@@ -62,5 +62,7 @@ public enum CommandType {
 	SCARD,
 	/** SSCAN集合成员扫描命令。 */
 	SSCAN,
+	/** BGREWRITEAOF后台重写AOF命令。 */
+	BGREWRITEAOF
 
 }

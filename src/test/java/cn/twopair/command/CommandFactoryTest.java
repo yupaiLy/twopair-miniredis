@@ -434,6 +434,21 @@ public class CommandFactoryTest {
 		Assert.assertEquals(CommandType.DEL, command.type());
 	}
 
+	/**
+	 * 验证命令工厂能够根据小写BGREWRITEAOF请求创建AOF管理命令。
+	 */
+	@Test
+	public void testCreateBgRewriteAof() {
+		RespArray array = new RespArray(new Resp[]{new BulkString(new BytesWrapper("bgrewriteaof".getBytes(StandardCharsets.UTF_8)))});
+
+		Command command = CommandFactory.from(array);
+
+		Assert.assertTrue(command instanceof BgRewriteAof);
+		Assert.assertTrue(command instanceof AofManagementCommand);
+		Assert.assertFalse(command instanceof WriteCommand);
+		Assert.assertEquals(CommandType.BGREWRITEAOF, command.type());
+	}
+
 
 	@Test
 	public void testUnsupportedCommand() {

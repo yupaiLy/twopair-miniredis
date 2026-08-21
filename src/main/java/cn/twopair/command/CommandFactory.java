@@ -71,6 +71,7 @@ public class CommandFactory {
 		COMMAND_MAP.put("SCAN", Scan::new);
 		COMMAND_MAP.put("TYPE", Type::new);
 		COMMAND_MAP.put("DEL", Del::new);
+		COMMAND_MAP.put("BGREWRITEAOF", BgRewriteAof::new);
 	}
 
 	/**

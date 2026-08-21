@@ -1511,4 +1511,85 @@ public class CommandHandlerTest {
 			channel.finishAndReleaseAll();
 		}
 	}
+
+	/**
+	 * 验证未启用AOF时BGREWRITEAOF返回RESP错误，且连接保持可用。
+	 */
+	@Test
+	public void testHandleBgRewriteAofWhenAofIsDisabled() {
+		EmbeddedChannel channel = new EmbeddedChannel(new RespEncoder(), new CommandHandler(new RedisCoreImpl()));
+
+		try {
+			channel.writeInbound(command("BGREWRITEAOF"));
+			Assert.assertEquals("-ERR AOF未启用\r\n", readOutboundAsString(channel));
+			Assert.assertTrue(channel.isOpen());
+
+			channel.writeInbound(command("PING"));
+			Assert.assertEquals("+PONG\r\n", readOutboundAsString(channel));
+		} finally {
+			channel.finishAndReleaseAll();
+		}
+	}
+
+	/**
+	 * 验证BGREWRITEAOF经过Netty命令链启动Rewrite，并将冗余历史压缩为最小恢复命令。
+	 *
+	 * @throws Exception AOF创建、Rewrite、重放或清理失败时抛出
+	 */
+	@Test(timeout = 10_000L)
+	public void testHandleBgRewriteAofWithAofEnabled() throws Exception {
+		Path path = Files.createTempFile("twopair-miniredis-bgrewriteaof-", ".aof");
+
+		try {
+			RedisCore redisCore = new RedisCoreImpl();
+
+			try (AofPersistence persistence = new AofPersistence(path, AofFsyncPolicy.ALWAYS)) {
+				EmbeddedChannel channel = new EmbeddedChannel(new RespEncoder(), new CommandHandler(redisCore, persistence));
+
+				try {
+					channel.writeInbound(command("SET", "name", "old-value"));
+					Assert.assertEquals("+OK\r\n", readOutboundAsString(channel));
+
+					channel.writeInbound(command("SET", "name", "李新数据"));
+					Assert.assertEquals("+OK\r\n", readOutboundAsString(channel));
+
+					channel.writeInbound(command("BGREWRITEAOF"));
+					Assert.assertEquals("+Background append only file rewriting started\r\n", readOutboundAsString(channel));
+
+					awaitRewrittenString(path, "name", "李新数据", 1);
+					Assert.assertFalse(Files.readString(path, StandardCharsets.UTF_8).contains("BGREWRITEAOF"));
+				} finally {
+					channel.finishAndReleaseAll();
+				}
+			}
+		} finally {
+			Files.deleteIfExists(path);
+		}
+	}
+
+	/**
+	 * 等待Rewrite后的AOF恢复出指定字符串和命令数量。
+	 *
+	 * @param path AOF文件路径
+	 * @param key 需要检查的key
+	 * @param expectedValue 期望恢复的字符串
+	 * @param expectedCommandCount 期望的恢复命令数量
+	 * @throws Exception AOF重放或等待失败时抛出
+	 */
+	private void awaitRewrittenString(Path path, String key, String expectedValue, int expectedCommandCount) throws Exception {
+		long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5L);
+
+		while (System.nanoTime() < deadline) {
+			RedisCore restoredCore = new RedisCoreImpl();
+			int commandCount = AofReplay.replay(path, restoredCore);
+			RedisData data = restoredCore.get(new BytesWrapper(key.getBytes(StandardCharsets.UTF_8)));
+
+			if (commandCount == expectedCommandCount && data instanceof RedisString redisString && expectedValue.equals(redisString.getValue().toUtf8String())) {
+				return;
+			}
+			Thread.sleep(10L);
+		}
+
+		Assert.fail("等待AOF Rewrite完成超时");
+	}
 }
