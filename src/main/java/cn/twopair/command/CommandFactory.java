@@ -57,6 +57,7 @@ public class CommandFactory {
 		COMMAND_MAP.put("LLEN", LLen::new);
 		COMMAND_MAP.put("LRANGE", LRange::new);
 		COMMAND_MAP.put("HSET", HSet::new);
+		COMMAND_MAP.put("HMSET", HMSet::new);
 		COMMAND_MAP.put("HGET", HGet::new);
 		COMMAND_MAP.put("HDEL", HDel::new);
 		COMMAND_MAP.put("HLEN", HLen::new);

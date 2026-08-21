@@ -202,6 +202,19 @@ public class CommandFactoryTest {
 	}
 
 	/**
+	 * 验证命令工厂能够根据小写HMSET请求创建对应命令。
+	 */
+	@Test
+	public void testCreateHMSet() {
+		RespArray array = new RespArray(new Resp[]{new BulkString(new BytesWrapper("hmset".getBytes(StandardCharsets.UTF_8))), new BulkString(new BytesWrapper("user:1".getBytes(StandardCharsets.UTF_8))), new BulkString(new BytesWrapper("name".getBytes(StandardCharsets.UTF_8))), new BulkString(new BytesWrapper("twopair".getBytes(StandardCharsets.UTF_8)))});
+
+		Command command = CommandFactory.from(array);
+
+		Assert.assertTrue(command instanceof HMSet);
+		Assert.assertEquals(CommandType.HMSET, command.type());
+	}
+
+	/**
 	 * 验证命令工厂能够根据小写HGET请求创建对应命令。
 	 */
 	@Test

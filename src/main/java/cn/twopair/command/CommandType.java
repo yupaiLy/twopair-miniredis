@@ -42,6 +42,8 @@ public enum CommandType {
 	LRANGE,
 	/** HSET哈希字段写入命令。 */
 	HSET,
+	/** HMSET哈希多字段写入兼容命令。 */
+	HMSET,
 	/** HGET哈希字段读取命令。 */
 	HGET,
 	/** HDEL哈希字段删除命令。 */
