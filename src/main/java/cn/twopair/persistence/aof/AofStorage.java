@@ -6,10 +6,9 @@ import java.io.IOException;
 import java.util.List;
 
 /**
+ * 定义AOF底层追加、刷盘和关闭能力。
+ *
  * @author ljj
- * @description 定义AOF底层追加、刷盘和关闭能力。
- * @date 2026/8/20
- * @twopair
  */
 interface AofStorage extends AutoCloseable {
 

@@ -9,15 +9,17 @@ import cn.twopair.resp.Resp;
 import cn.twopair.resp.SimpleString;
 
 /**
+ * 兼容客户端发送的SELECT 0命令，当前项目仅支持默认数据库。
+ *
  * @author ljj
- * @description 兼容客户端发送的SELECT 0命令，当前项目仅支持默认数据库。
- * @date 2026/8/19
- * @twopair
  */
 public class Select implements Command {
 
 	private long database;
 
+	/**
+	 * {@inheritDoc}
+	 */
 	@Override
 	public CommandType type() {
 		return CommandType.SELECT;
@@ -27,6 +29,7 @@ public class Select implements Command {
 	 * 解析SELECT命令参数。
 	 *
 	 * @param array 命令数组，格式为SELECT database
+	 * @throws IllegalArgumentException 当参数数量、类型或内容不合法时抛出
 	 */
 	@Override
 	public void setContent(Resp[] array) {
@@ -60,6 +63,9 @@ public class Select implements Command {
 		this.database = parsedDatabase;
 	}
 
+	/**
+	 * {@inheritDoc}
+	 */
 	@Override
 	public Resp handle(RedisCore redisCore) {
 		// database已经在参数解析阶段验证为0，因此这里不需要切换存储。

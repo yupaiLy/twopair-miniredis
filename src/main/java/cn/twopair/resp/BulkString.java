@@ -5,20 +5,19 @@ import lombok.AllArgsConstructor;
 import lombok.Getter;
 
 /**
+ * RESP块字符串（Bulk String）
+ *
  * @author ljj
- * @description RESP字符串
- * @date 2026/4/10
- * @twopair
  */
 @Getter
 @AllArgsConstructor
 public class BulkString implements Resp {
 	/**
-	 * 空值 块字符串，对应$-1\r\n\r\n
+	 * 空值块字符串，内容为 {@code null}，对应RESP编码 {@code $-1\r\n}
 	 */
 	public static final BulkString NIL = new BulkString(null);
 	/**
-	 * 内容
+	 * 块字符串内容
 	 */
 	private final BytesWrapper bytesWrapper;
 

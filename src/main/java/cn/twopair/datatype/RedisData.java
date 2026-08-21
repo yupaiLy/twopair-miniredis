@@ -1,23 +1,22 @@
 package cn.twopair.datatype;
 
 /**
+ * Redis数据对象接口
+ *
  * @author ljj
- * @description Redis数据对象接口
- * @date 2026/4/9
- * @twopair
  */
 public interface RedisData {
 	/**
-	 * 获取数据对象超时时间
+	 * 获取数据的绝对毫秒过期时间。
 	 *
-	 * @return 超时时间
+	 * @return 绝对毫秒时间戳；-1表示永久有效
 	 */
 	long timeout();
 
 	/**
-	 * 设置数据对象超时时间
+	 * 设置数据的绝对毫秒过期时间。
 	 *
-	 * @param timeout 超时时间
+	 * @param timeout 绝对毫秒时间戳；-1表示永久有效
 	 */
 	void setTimeout(long timeout);
 }

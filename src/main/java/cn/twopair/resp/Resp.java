@@ -6,22 +6,22 @@ import io.netty.buffer.ByteBuf;
 import static cn.twopair.datatype.BytesWrapper.CHARSET;
 
 /**
+ * RESP协议对象顶层抽象
+ *
  * @author ljj
- * @description RESP协议对象顶层抽象
- * @date 2026/4/10
- * @twopair
  */
 public interface Resp {
 
 	/**
-	 * Encodes a given RESP (REdis Serialization Protocol) object into the provided ByteBuf buffer.
-	 * This method serializes RESP types, including SimpleString, Errors, RespInt, BulkString, and RespArray,
-	 * into their respective byte representations following the RESP protocol.
+	 * 将 RESP 对象编码为字节并写入指定缓冲区。
 	 *
-	 * @param resp   the RESP object to encode; supported types include SimpleString, Errors, RespInt, BulkString,
-	 *               and RespArray
-	 * @param buffer the ByteBuf into which the RESP object will be serialized
-	 * @throws IllegalStateException if the provided RESP object type is unsupported
+	 * <p>支持 {@link SimpleString}、{@link Errors}、{@link RespInt}、
+	 * {@link BulkString} 和 {@link RespArray} 五种类型，
+	 * 按RESP协议规则序列化为对应的字节表示。
+	 *
+	 * @param resp   需要编码的RESP对象
+	 * @param buffer 接收编码结果的 {@code ByteBuf} 缓冲区
+	 * @throws IllegalStateException 当RESP对象类型不受支持时抛出
 	 */
 	static void encode(Resp resp, ByteBuf buffer) {
 		if (resp instanceof SimpleString) {
@@ -106,6 +106,14 @@ public interface Resp {
 	}
 
 
+	/**
+	 * 从缓冲区解码一条RESP消息。
+	 *
+	 * @param buffer 包含待解码数据的缓冲区
+	 * @return 解码得到的RESP对象
+	 * @throws RespIncompleteException 当缓冲区数据不足以组成完整消息时抛出
+	 * @throws IllegalStateException    当数据不符合RESP协议时抛出
+	 */
 	static Resp decode(ByteBuf buffer) {
 		if (buffer.readableBytes() <= 0) {
 			throw new RespIncompleteException();
@@ -151,6 +159,14 @@ public interface Resp {
 		}
 	}
 
+	/**
+	 * 读取以CRLF结尾的RESP字符串内容。
+	 *
+	 * @param buffer 包含待读取数据的缓冲区
+	 * @return 不包含结尾CRLF的字符串内容
+	 * @throws RespIncompleteException 当尚未收到完整CRLF时抛出
+	 * @throws IllegalStateException    当CR后紧跟的字节不是LF时抛出
+	 */
 	static String getString(ByteBuf buffer) {
 		StringBuilder builder = new StringBuilder();
 		byte current;
@@ -172,11 +188,13 @@ public interface Resp {
 		}
 		return builder.toString();
 	}
+
 	/**
-	 * @author ljj
-	 * @description 读取 RESP 数字并转换为有符号 64 位整数。
-	 * @date 2026/7/16
-	 * @twopair
+	 * 读取 RESP 数字并转换为有符号64位整数。
+	 *
+	 * @param buffer 包含待读取数据的缓冲区
+	 * @return 解析得到的 {@code long} 数值
+	 * @throws IllegalStateException 当数字格式非法或超出 {@code long} 范围时抛出
 	 */
 	static long getNumber(ByteBuf buffer) {
 		// getString 已经负责处理 CRLF 和 TCP 半包。
@@ -192,11 +210,15 @@ public interface Resp {
 			);
 		}
 	}
+
 	/**
-	 * @author ljj
-	 * @description 将 RESP 长度转换为 Java 可用的 int 长度。
-	 * @date 2026/7/16
-	 * @twopair
+	 * 将 RESP 长度转换为 Java 可用的 {@code int} 长度。
+	 *
+	 * @param buffer   包含待读取数据的缓冲区
+	 * @param typeName 出错时用于提示的类型名称
+	 * @return 转换后的长度，-1表示空值
+	 * @throws RespIncompleteException 数据尚未包含完整长度及CRLF时抛出
+	 * @throws IllegalStateException    长度不是整数、小于-1或超过 {@code Integer.MAX_VALUE} 时抛出
 	 */
 	private static int getLength(ByteBuf buffer, String typeName) {
 		long length = getNumber(buffer);

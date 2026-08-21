@@ -11,29 +11,40 @@ import java.util.List;
 import java.util.Map;
 
 /**
+ * 实现HSCAN命令，分页扫描Hash中的field和value。
+ *
  * @author ljj
- * @description 实现HSCAN命令，分页扫描Hash中的field和value。
- * @date 2026/8/19
- * @twopair
  */
 public class HScan extends AbstractCollectionScan<Map.Entry<BytesWrapper, BytesWrapper>> {
 
+	/**
+	 * {@inheritDoc}
+	 */
 	@Override
 	public CommandType type() {
 		return CommandType.HSCAN;
 	}
 
+	/**
+	 * {@inheritDoc}
+	 */
 	@Override
 	protected List<Map.Entry<BytesWrapper, BytesWrapper>> getItems(RedisCore redisCore, BytesWrapper key) {
 		return redisCore.scanHashEntries(key);
 	}
 
+	/**
+	 * {@inheritDoc}
+	 */
 	@Override
 	protected String getMatchText(Map.Entry<BytesWrapper, BytesWrapper> item) {
 		// Redis的HSCAN MATCH只匹配field，不匹配value。
 		return item.getKey().toUtf8String();
 	}
 
+	/**
+	 * {@inheritDoc}
+	 */
 	@Override
 	protected Resp[] encodeItem(Map.Entry<BytesWrapper, BytesWrapper> item) {
 		return new Resp[]{new BulkString(item.getKey()), new BulkString(item.getValue())};

@@ -3,10 +3,9 @@ package cn.twopair.datatype;
 import java.util.*;
 
 /**
+ * Redis集合值对象，封装唯一成员集合和过期时间。
+ *
  * @author ljj
- * @description Redis集合值对象，封装唯一成员集合和过期时间。
- * @date 2026/8/19
- * @twopair
  */
 public class RedisSet implements RedisData {
 
@@ -74,7 +73,7 @@ public class RedisSet implements RedisData {
 	 * 判断指定成员是否存在。
 	 *
 	 * @param member 需要判断的成员
-	 * @return 成员存在时返回true
+	 * @return 成员存在时返回 {@code true}
 	 */
 	public synchronized boolean contains(BytesWrapper member) {
 		Objects.requireNonNull(member, "Set的member不能为空");
@@ -101,11 +100,17 @@ public class RedisSet implements RedisData {
 		return members;
 	}
 
+	/**
+	 * {@inheritDoc}
+	 */
 	@Override
 	public long timeout() {
 		return timeout;
 	}
 
+	/**
+	 * {@inheritDoc}
+	 */
 	@Override
 	public void setTimeout(long timeout) {
 		this.timeout = timeout;

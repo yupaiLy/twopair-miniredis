@@ -12,16 +12,18 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
+ * 实现Redis的HDEL命令，删除Hash中的一个或多个字段。
+ *
  * @author ljj
- * @description 实现Redis的HDEL命令，删除Hash中的一个或多个字段。
- * @date 2026/8/19
- * @twopair
  */
 public class HDel implements WriteCommand {
 
 	private BytesWrapper key;
 	private List<BytesWrapper> fields;
 
+	/**
+	 * {@inheritDoc}
+	 */
 	@Override
 	public CommandType type() {
 		return CommandType.HDEL;
@@ -31,6 +33,7 @@ public class HDel implements WriteCommand {
 	 * 解析HDEL命令参数。
 	 *
 	 * @param array 命令数组，格式为HDEL key field [field ...]
+	 * @throws IllegalArgumentException 当参数数量、类型或内容不合法时抛出
 	 */
 	@Override
 	public void setContent(Resp[] array) {
@@ -67,6 +70,9 @@ public class HDel implements WriteCommand {
 		this.fields = parsedFields;
 	}
 
+	/**
+	 * {@inheritDoc}
+	 */
 	@Override
 	public Resp handle(RedisCore redisCore) {
 		return new RespInt(redisCore.deleteHashFields(key, fields));

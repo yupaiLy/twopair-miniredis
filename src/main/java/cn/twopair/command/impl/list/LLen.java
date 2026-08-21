@@ -9,15 +9,17 @@ import cn.twopair.resp.Resp;
 import cn.twopair.resp.RespInt;
 
 /**
+ * 实现Redis的LLEN命令，获取列表包含的元素数量。
+ *
  * @author ljj
- * @description 实现Redis的LLEN命令，获取列表包含的元素数量。
- * @date 2026/8/18
- * @twopair
  */
 public class LLen implements Command {
 
 	private BytesWrapper key;
 
+	/**
+	 * {@inheritDoc}
+	 */
 	@Override
 	public CommandType type() {
 		return CommandType.LLEN;
@@ -27,6 +29,7 @@ public class LLen implements Command {
 	 * 解析LLEN命令参数。
 	 *
 	 * @param array 命令数组，格式为LLEN key
+	 * @throws IllegalArgumentException 当参数数量、类型或内容不合法时抛出
 	 */
 	@Override
 	public void setContent(Resp[] array) {
@@ -47,6 +50,9 @@ public class LLen implements Command {
 		this.key = parsedKey;
 	}
 
+	/**
+	 * {@inheritDoc}
+	 */
 	@Override
 	public Resp handle(RedisCore redisCore) {
 		return new RespInt(redisCore.listLength(key));

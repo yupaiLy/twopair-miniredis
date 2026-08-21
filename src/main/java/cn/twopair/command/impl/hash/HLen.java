@@ -9,15 +9,17 @@ import cn.twopair.resp.Resp;
 import cn.twopair.resp.RespInt;
 
 /**
+ * 实现Redis的HLEN命令，获取Hash包含的字段数量。
+ *
  * @author ljj
- * @description 实现Redis的HLEN命令，获取Hash包含的字段数量。
- * @date 2026/8/19
- * @twopair
  */
 public class HLen implements Command {
 
 	private BytesWrapper key;
 
+	/**
+	 * {@inheritDoc}
+	 */
 	@Override
 	public CommandType type() {
 		return CommandType.HLEN;
@@ -27,6 +29,7 @@ public class HLen implements Command {
 	 * 解析HLEN命令参数。
 	 *
 	 * @param array 命令数组，格式为HLEN key
+	 * @throws IllegalArgumentException 当参数数量、类型或内容不合法时抛出
 	 */
 	@Override
 	public void setContent(Resp[] array) {
@@ -47,6 +50,9 @@ public class HLen implements Command {
 		this.key = parsedKey;
 	}
 
+	/**
+	 * {@inheritDoc}
+	 */
 	@Override
 	public Resp handle(RedisCore redisCore) {
 		return new RespInt(redisCore.getHashSize(key));

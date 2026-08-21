@@ -8,18 +8,19 @@ import io.netty.handler.codec.ByteToMessageDecoder;
 import java.util.List;
 
 /**
+ * 将入站 ByteBuf 解码为完整 RESP 对象。
+ *
  * @author ljj
- * @description 将入站 ByteBuf 解码为完整 RESP 对象。
- * @date 2026/7/10
- * @twopair
  */
 public class RespDecoder extends ByteToMessageDecoder {
 
 	/**
-	 * @author ljj
-	 * @description 尝试读取一条完整 RESP；半包时不输出对象，等待后续字节。
-	 * @date 2026/7/10
-	 * @twopair
+	 * 尝试读取一条完整 RESP；半包时不输出对象，等待后续字节。
+	 *
+	 * @param ctx 当前连接的Handler上下文
+	 * @param in  Netty累积的入站字节缓冲区
+	 * @param out 接收完整RESP对象的输出列表
+	 * @throws RuntimeException RESP数据违反协议格式时抛出
 	 */
 	@Override
 	protected void decode(ChannelHandlerContext ctx, ByteBuf in, List<Object> out) {

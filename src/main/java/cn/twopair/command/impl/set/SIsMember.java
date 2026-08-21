@@ -9,16 +9,18 @@ import cn.twopair.resp.Resp;
 import cn.twopair.resp.RespInt;
 
 /**
+ * 实现Redis的SISMEMBER命令，判断Set是否包含指定成员。
+ *
  * @author ljj
- * @description 实现Redis的SISMEMBER命令，判断Set是否包含指定成员。
- * @date 2026/8/19
- * @twopair
  */
 public class SIsMember implements Command {
 
 	private BytesWrapper key;
 	private BytesWrapper member;
 
+	/**
+	 * {@inheritDoc}
+	 */
 	@Override
 	public CommandType type() {
 		return CommandType.SISMEMBER;
@@ -28,6 +30,7 @@ public class SIsMember implements Command {
 	 * 解析SISMEMBER命令参数。
 	 *
 	 * @param array 命令数组，格式为SISMEMBER key member
+	 * @throws IllegalArgumentException 当参数数量、类型或内容不合法时抛出
 	 */
 	@Override
 	public void setContent(Resp[] array) {
@@ -50,6 +53,9 @@ public class SIsMember implements Command {
 		this.member = parsedMember;
 	}
 
+	/**
+	 * {@inheritDoc}
+	 */
 	@Override
 	public Resp handle(RedisCore redisCore) {
 		boolean exists = redisCore.containsSetMember(key, member);

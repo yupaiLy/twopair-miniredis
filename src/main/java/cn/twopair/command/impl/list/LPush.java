@@ -12,16 +12,18 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
+ * 实现Redis的LPUSH命令，将元素依次压入列表头部。
+ *
  * @author ljj
- * @description 实现Redis的LPUSH命令，将元素依次压入列表头部。
- * @date 2026/8/18
- * @twopair
  */
 public class LPush implements WriteCommand {
 
 	private BytesWrapper key;
 	private List<BytesWrapper> elements;
 
+	/**
+	 * {@inheritDoc}
+	 */
 	@Override
 	public CommandType type() {
 		return CommandType.LPUSH;
@@ -31,6 +33,7 @@ public class LPush implements WriteCommand {
 	 * 解析LPUSH命令参数。
 	 *
 	 * @param array 命令数组，格式为LPUSH key element [element ...]
+	 * @throws IllegalArgumentException 当参数数量、类型或内容不合法时抛出
 	 */
 	@Override
 	public void setContent(Resp[] array) {
@@ -69,6 +72,9 @@ public class LPush implements WriteCommand {
 		this.elements = parsedElements;
 	}
 
+	/**
+	 * {@inheritDoc}
+	 */
 	@Override
 	public Resp handle(RedisCore redisCore) {
 		return new RespInt(redisCore.leftPush(key, elements));

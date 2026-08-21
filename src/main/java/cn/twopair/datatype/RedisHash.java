@@ -3,10 +3,9 @@ package cn.twopair.datatype;
 import java.util.*;
 
 /**
+ * Redis哈希值对象，封装字段映射和过期时间。
+ *
  * @author ljj
- * @description Redis哈希值对象，封装字段映射和过期时间。
- * @date 2026/8/18
- * @twopair
  */
 public class RedisHash implements RedisData {
 
@@ -52,7 +51,7 @@ public class RedisHash implements RedisData {
 	 * 获取指定字段的值。
 	 *
 	 * @param field 字段
-	 * @return 字段值；字段不存在时返回null
+	 * @return 字段值；字段不存在时返回 {@code null}
 	 */
 	public synchronized BytesWrapper get(BytesWrapper field) {
 		Objects.requireNonNull(field, "Hash的field不能为空");
@@ -109,11 +108,17 @@ public class RedisHash implements RedisData {
 		return entries;
 	}
 
+	/**
+	 * {@inheritDoc}
+	 */
 	@Override
 	public long timeout() {
 		return timeout;
 	}
 
+	/**
+	 * {@inheritDoc}
+	 */
 	@Override
 	public void setTimeout(long timeout) {
 		this.timeout = timeout;

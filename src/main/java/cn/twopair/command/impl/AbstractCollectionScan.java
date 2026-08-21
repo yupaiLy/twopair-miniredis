@@ -13,10 +13,9 @@ import java.util.List;
 import java.util.Locale;
 
 /**
+ * 封装HSCAN和SSCAN共享的参数解析、游标分页与MATCH过滤流程。
+ *
  * @author ljj
- * @description 封装HSCAN和SSCAN共享的参数解析、游标分页与MATCH过滤流程。
- * @date 2026/8/19
- * @twopair
  */
 public abstract class AbstractCollectionScan<T> implements Command {
 
@@ -25,6 +24,9 @@ public abstract class AbstractCollectionScan<T> implements Command {
 	private String matchPattern = "*";
 	private long count = 10L;
 
+	/**
+	 * {@inheritDoc}
+	 */
 	@Override
 	public void setContent(Resp[] array) {
 		String commandName = type().name();
@@ -69,6 +71,9 @@ public abstract class AbstractCollectionScan<T> implements Command {
 		this.count = parsedCount;
 	}
 
+	/**
+	 * {@inheritDoc}
+	 */
 	@Override
 	public Resp handle(RedisCore redisCore) {
 		List<T> matchedItems = new ArrayList<>();
@@ -92,12 +97,40 @@ public abstract class AbstractCollectionScan<T> implements Command {
 		return response(nextCursor, matchedItems.subList(fromIndex, toIndex));
 	}
 
+	/**
+	 * 获取需要扫描的全量条目。
+	 *
+	 * <p>基类负责MATCH过滤和游标分页，子类只需返回目标集合的完整快照。
+	 *
+	 * @param redisCore Redis核心存储
+	 * @param key       需要扫描的key
+	 * @return 按固定顺序排列的全量条目
+	 */
 	protected abstract List<T> getItems(RedisCore redisCore, BytesWrapper key);
 
+	/**
+	 * 获取条目中参与MATCH匹配的文本。
+	 *
+	 * @param item 需要匹配的条目
+	 * @return 用于匹配的文本，例如Hash条目只返回field
+	 */
 	protected abstract String getMatchText(T item);
 
+	/**
+	 * 将条目编码为RESP响应元素。
+	 *
+	 * @param item 需要编码的条目
+	 * @return 该条目对应的RESP对象数组，例如Hash条目返回field和value两个元素
+	 */
 	protected abstract Resp[] encodeItem(T item);
 
+	/**
+	 * 将下一游标和当前页条目编码为SCAN族命令的标准两元素响应。
+	 *
+	 * @param nextCursor 下一次扫描使用的游标，0表示本轮遍历结束
+	 * @param items      当前页需要返回的条目
+	 * @return 包含下一游标和当前页数据的RESP数组
+	 */
 	private RespArray response(long nextCursor, List<T> items) {
 		List<Resp> encodedItems = new ArrayList<>();
 
@@ -113,6 +146,14 @@ public abstract class AbstractCollectionScan<T> implements Command {
 		});
 	}
 
+	/**
+	 * 解析并校验SCAN族命令的游标。
+	 *
+	 * @param value       客户端传入的游标文本
+	 * @param commandName 当前命令名称，用于构造错误信息
+	 * @return 非负游标
+	 * @throws IllegalArgumentException 游标不是非负整数时抛出
+	 */
 	private long parseCursor(String value, String commandName) {
 		try {
 			long parsedCursor = Long.parseLong(value);
@@ -125,6 +166,14 @@ public abstract class AbstractCollectionScan<T> implements Command {
 		}
 	}
 
+	/**
+	 * 解析并校验SCAN族命令的COUNT选项。
+	 *
+	 * @param value       客户端传入的COUNT文本
+	 * @param commandName 当前命令名称，用于构造错误信息
+	 * @return 大于0的期望返回数量
+	 * @throws IllegalArgumentException COUNT不是正整数时抛出
+	 */
 	private long parseCount(String value, String commandName) {
 		try {
 			long parsedCount = Long.parseLong(value);
@@ -137,10 +186,23 @@ public abstract class AbstractCollectionScan<T> implements Command {
 		}
 	}
 
+	/**
+	 * 将已校验的BulkString参数转换为UTF-8文本。
+	 *
+	 * @param resp 已校验为非空BulkString的RESP参数
+	 * @return 参数的UTF-8文本
+	 */
 	private String text(Resp resp) {
 		return ((BulkString) resp).getBytesWrapper().toUtf8String();
 	}
 
+	/**
+	 * 使用Redis SCAN支持的问号和星号通配规则匹配文本。
+	 *
+	 * @param pattern MATCH选项传入的匹配模式
+	 * @param value   需要匹配的文本
+	 * @return 文本符合模式时返回 {@code true}
+	 */
 	private boolean globMatches(String pattern, String value) {
 		int patternIndex = 0;
 		int valueIndex = 0;

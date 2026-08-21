@@ -9,15 +9,17 @@ import cn.twopair.resp.Resp;
 import cn.twopair.resp.RespInt;
 
 /**
+ * 实现Redis的SCARD命令，获取Set包含的唯一成员数量。
+ *
  * @author ljj
- * @description 实现Redis的SCARD命令，获取Set包含的唯一成员数量。
- * @date 2026/8/19
- * @twopair
  */
 public class SCard implements Command {
 
 	private BytesWrapper key;
 
+	/**
+	 * {@inheritDoc}
+	 */
 	@Override
 	public CommandType type() {
 		return CommandType.SCARD;
@@ -27,6 +29,7 @@ public class SCard implements Command {
 	 * 解析SCARD命令参数。
 	 *
 	 * @param array 命令数组，格式为SCARD key
+	 * @throws IllegalArgumentException 当参数数量、类型或内容不合法时抛出
 	 */
 	@Override
 	public void setContent(Resp[] array) {
@@ -47,6 +50,9 @@ public class SCard implements Command {
 		this.key = parsedKey;
 	}
 
+	/**
+	 * {@inheritDoc}
+	 */
 	@Override
 	public Resp handle(RedisCore redisCore) {
 		return new RespInt(redisCore.getSetSize(key));

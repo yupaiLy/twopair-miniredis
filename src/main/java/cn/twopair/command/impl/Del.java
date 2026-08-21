@@ -12,15 +12,17 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
+ * 实现Redis的DEL命令，删除一个或多个key。
+ *
  * @author ljj
- * @description 实现Redis的DEL命令，删除一个或多个key。
- * @date 2026/8/20
- * @twopair
  */
 public class Del implements WriteCommand {
 
 	private List<BytesWrapper> keys;
 
+	/**
+	 * {@inheritDoc}
+	 */
 	@Override
 	public CommandType type() {
 		return CommandType.DEL;
@@ -30,6 +32,7 @@ public class Del implements WriteCommand {
 	 * 解析DEL命令参数。
 	 *
 	 * @param array 命令数组，格式为DEL key [key ...]
+	 * @throws IllegalArgumentException 当参数数量、类型或内容不合法时抛出
 	 */
 	@Override
 	public void setContent(Resp[] array) {
@@ -59,6 +62,9 @@ public class Del implements WriteCommand {
 		this.keys = parsedKeys;
 	}
 
+	/**
+	 * {@inheritDoc}
+	 */
 	@Override
 	public Resp handle(RedisCore redisCore) {
 		return new RespInt(redisCore.delete(keys));

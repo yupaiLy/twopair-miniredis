@@ -12,16 +12,18 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
+ * 实现Redis的SADD命令，向Set添加一个或多个成员。
+ *
  * @author ljj
- * @description 实现Redis的SADD命令，向Set添加一个或多个成员。
- * @date 2026/8/19
- * @twopair
  */
 public class SAdd implements WriteCommand {
 
 	private BytesWrapper key;
 	private List<BytesWrapper> members;
 
+	/**
+	 * {@inheritDoc}
+	 */
 	@Override
 	public CommandType type() {
 		return CommandType.SADD;
@@ -31,6 +33,7 @@ public class SAdd implements WriteCommand {
 	 * 解析SADD命令参数。
 	 *
 	 * @param array 命令数组，格式为SADD key member [member ...]
+	 * @throws IllegalArgumentException 当参数数量、类型或内容不合法时抛出
 	 */
 	@Override
 	public void setContent(Resp[] array) {
@@ -69,6 +72,9 @@ public class SAdd implements WriteCommand {
 		this.members = parsedMembers;
 	}
 
+	/**
+	 * {@inheritDoc}
+	 */
 	@Override
 	public Resp handle(RedisCore redisCore) {
 		return new RespInt(redisCore.addSetMembers(key, members));

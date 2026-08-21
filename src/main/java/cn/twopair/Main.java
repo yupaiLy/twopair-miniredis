@@ -6,13 +6,13 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
+ * MiniRedis 应用启动入口。
+ *
  * @author ljj
- * @description MiniRedis 应用启动入口。
- * @date 2026/7/16
- * @twopair
  */
 public class Main {
 	private static final Logger LOGGER = LoggerFactory.getLogger(Main.class);
+	/** AOF刷盘策略对应的JVM系统属性名称。 */
 	public static final String AOF_FSYNC_PROPERTY = "miniredis.aof.fsync";
 
 	/**

@@ -15,10 +15,9 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 /**
+ * 实现Redis的SETEX命令，用于写入字符串并同时设置以秒为单位的过期时间。
+ *
  * @author ljj
- * @description 实现Redis的SETEX命令，用于写入字符串并同时设置以秒为单位的过期时间。
- * @date 2026/8/11
- * @twopair
  */
 public class SetEx implements WriteCommand {
 
@@ -26,6 +25,9 @@ public class SetEx implements WriteCommand {
 	private BytesWrapper value;
 	private long seconds;
 
+	/**
+	 * {@inheritDoc}
+	 */
 	@Override
 	public CommandType type() {
 		return CommandType.SETEX;

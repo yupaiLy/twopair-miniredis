@@ -11,14 +11,16 @@ import cn.twopair.resp.BulkString;
 import cn.twopair.resp.Resp;
 
 /**
+ * 实现Redis的GET命令，读取String类型的值。
+ *
  * @author ljj
- * @description 实现Redis的GET命令，读取String类型的值。
- * @date 2026/7/10
- * @twopair
  */
 public class Get implements Command {
 	private BytesWrapper key;
 
+	/**
+	 * {@inheritDoc}
+	 */
 	@Override
 	public CommandType type() {
 		return CommandType.GET;
@@ -28,6 +30,7 @@ public class Get implements Command {
 	 * 解析GET命令参数。
 	 *
 	 * @param array 命令数组，格式为GET key
+	 * @throws IllegalArgumentException 当参数数量、类型或内容不合法时抛出
 	 */
 	@Override
 	public void setContent(Resp[] array) {
@@ -52,7 +55,7 @@ public class Get implements Command {
 	 * 读取key对应的String值。
 	 *
 	 * @param redisCore Redis核心存储
-	 * @return 字符串值；key不存在时返回NIL
+	 * @return 字符串值；key不存在时返回 {@link BulkString#NIL}
 	 * @throws WrongTypeException key存在但不是String时抛出
 	 */
 	@Override

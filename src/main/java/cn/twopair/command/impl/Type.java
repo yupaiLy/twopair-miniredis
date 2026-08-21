@@ -9,15 +9,17 @@ import cn.twopair.resp.Resp;
 import cn.twopair.resp.SimpleString;
 
 /**
+ * 实现TYPE命令，返回指定key保存的数据类型。
+ *
  * @author ljj
- * @description 实现TYPE命令，返回指定key保存的数据类型。
- * @date 2026/8/19
- * @twopair
  */
 public class Type implements Command {
 
 	private BytesWrapper key;
 
+	/**
+	 * {@inheritDoc}
+	 */
 	@Override
 	public CommandType type() {
 		return CommandType.TYPE;
@@ -27,6 +29,7 @@ public class Type implements Command {
 	 * 解析TYPE命令参数。
 	 *
 	 * @param array 命令数组，格式为TYPE key
+	 * @throws IllegalArgumentException 当参数数量、类型或内容不合法时抛出
 	 */
 	@Override
 	public void setContent(Resp[] array) {
@@ -50,7 +53,7 @@ public class Type implements Command {
 	 * 查询key对应的数据类型。
 	 *
 	 * @param redisCore Redis核心存储
-	 * @return string、list、hash、set或none简单字符串
+	 * @return 内容为 {@code string}、{@code list}、{@code hash}、{@code set} 或 {@code none} 的简单字符串
 	 */
 	@Override
 	public Resp handle(RedisCore redisCore) {

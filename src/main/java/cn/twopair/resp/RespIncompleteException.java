@@ -1,10 +1,9 @@
 package cn.twopair.resp;
 
 /**
+ * 表示 RESP 数据尚未接收完整。
+ *
  * @author ljj
- * @description 表示 RESP 数据尚未接收完整。
- * @date 2026/7/10
- * @twopair
  */
 final class RespIncompleteException extends IllegalStateException {
 	/**

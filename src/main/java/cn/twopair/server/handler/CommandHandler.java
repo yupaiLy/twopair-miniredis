@@ -22,16 +22,15 @@ import java.io.IOException;
 import java.util.List;
 
 /**
+ * 将 RESP 请求转换成 Redis 命令并执行。
+ *
  * @author ljj
- * @description 将 RESP 请求转换成 Redis 命令并执行。
- * @date 2026/7/13
- * @twopair
  */
 public class CommandHandler extends SimpleChannelInboundHandler<Resp> {
 	private static final Logger LOGGER = LoggerFactory.getLogger(CommandHandler.class);
 
 	/**
-	 * AOF持久化协调器；为null表示当前服务未启用AOF。
+	 * AOF持久化协调器；为 {@code null} 表示当前服务未启用AOF。
 	 */
 	private final AofPersistence aofPersistence;
 
@@ -93,10 +92,7 @@ public class CommandHandler extends SimpleChannelInboundHandler<Resp> {
 	}
 
 	/**
-	 * @author ljj
-	 * @description 接收完整 RESP，执行对应命令并写回响应。
-	 * @date 2026/7/13
-	 * @twopair
+	 * 接收完整 RESP，执行对应命令并写回响应。
 	 */
 	@Override
 	protected void channelRead0(ChannelHandlerContext ctx, Resp resp) {
@@ -302,7 +298,7 @@ public class CommandHandler extends SimpleChannelInboundHandler<Resp> {
 	}
 
 	/**
-	 * 获取客户端远端地址，EmbeddedChannel等测试连接没有地址时返回unknown。
+	 * 获取客户端远端地址，{@code EmbeddedChannel} 等测试连接没有地址时返回 {@code unknown}。
 	 *
 	 * @param ctx 当前连接上下文
 	 * @return 远端地址文本

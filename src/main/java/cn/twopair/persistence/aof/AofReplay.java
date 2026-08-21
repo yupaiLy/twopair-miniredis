@@ -18,14 +18,16 @@ import java.nio.file.StandardOpenOption;
 import java.util.Objects;
 
 /**
+ * 负责重放AOF命令，并修复文件末尾不完整的RESP数据。
+ *
  * @author ljj
- * @description 负责重放AOF命令，并修复文件末尾不完整的RESP数据。
- * @date 2026/8/18
- * @twopair
  */
 public final class AofReplay {
 	private static final Logger LOGGER = LoggerFactory.getLogger(AofReplay.class);
 
+	/**
+	 * 工具类不允许创建实例。
+	 */
 	private AofReplay() {
 	}
 

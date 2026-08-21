@@ -10,21 +10,30 @@ import cn.twopair.resp.Resp;
 import cn.twopair.resp.SimpleString;
 
 /**
+ * 实现Redis的SET命令，写入String类型的值。
+ *
  * @author ljj
- * @description
- * @date 2026/7/10
- * @twopair
  */
 public class Set implements WriteCommand {
 
 	private BytesWrapper key;
 	private BytesWrapper value;
 
+	/**
+	 * {@inheritDoc}
+	 */
 	@Override
 	public CommandType type() {
 		return CommandType.SET;
 	}
 
+	/**
+	 * 解析SET命令参数。
+	 *
+	 * <p>当前实现直接读取key和value，尚未做参数校验。
+	 *
+	 * @param array 命令数组，格式为SET key value
+	 */
 	@Override
 	public void setContent(Resp[] array) {
 		this.key = ((BulkString) array[1]).getBytesWrapper();
@@ -32,10 +41,10 @@ public class Set implements WriteCommand {
 	}
 
 	/**
-	 * Handles the SET command by storing the provided key-value pair in the Redis core.
+	 * 将key和value写入Redis核心存储，并清除已有的过期时间。
 	 *
-	 * @param redisCore The core storage of the Redis server where the key-value pair will be stored.
-	 * @return A RESP simple string response confirming the operation with "OK".
+	 * @param redisCore Redis核心存储
+	 * @return 内容为 {@code OK} 的简单字符串
 	 */
 	@Override
 	public Resp handle(RedisCore redisCore) {

@@ -21,26 +21,25 @@ import java.util.Map;
 import java.util.function.Supplier;
 
 /**
+ * Redis命令工厂
+ *
  * @author ljj
- * @description Redis命令工厂
- * @date 2026/7/10
- * @twopair
  */
 public class CommandFactory {
 
 	/**
 	 * 命令注册表。
 	 *
-	 * <p>key 是 Redis 命令名，例如 PING、SET、GET。
-	 * value 是 Command 的创建器，而不是 Command 实例本身。
+	 * <p>key 是 Redis 命令名，例如 {@code PING}、{@code SET}、{@code GET}。
+	 * value 是 {@code Command} 的创建器，而不是 {@code Command} 实例本身。
 	 *
-	 * <p>这里使用 Supplier 的原因：
+	 * <p>这里使用 {@code Supplier} 的原因：
 	 * <ol>
-	 *     <li>每次解析请求时都通过 Supplier#get() 创建新的 Command 对象；</li>
-	 *     <li>Command 会通过 setContent(array) 保存本次请求参数，属于有状态对象；</li>
-	 *     <li>如果 Map 中直接保存 Command 实例，不同请求会复用同一个对象，导致 content 被覆盖；</li>
-	 *     <li>在并发请求下，复用同一个 Command 实例还可能造成线程安全问题；</li>
-	 *     <li>使用 Supplier 可以替代大量 if-else / switch，新增命令时只需要注册一行。</li>
+	 *     <li>每次解析请求时都通过 {@code Supplier#get()} 创建新的 {@code Command} 对象；</li>
+	 *     <li>{@code Command} 会通过 {@code setContent(array)} 保存本次请求参数，属于有状态对象；</li>
+	 *     <li>如果 {@code Map} 中直接保存 {@code Command} 实例，不同请求会复用同一个对象，导致参数被覆盖；</li>
+	 *     <li>在并发请求下，复用同一个 {@code Command} 实例还可能造成线程安全问题；</li>
+	 *     <li>使用 {@code Supplier} 可以替代大量 {@code if-else} / {@code switch}，新增命令时只需要注册一行。</li>
 	 * </ol>
 	 */
 	private static final Map<String, Supplier<Command>> COMMAND_MAP = new HashMap<>();
@@ -74,14 +73,18 @@ public class CommandFactory {
 		COMMAND_MAP.put("DEL", Del::new);
 	}
 
+	/**
+	 * 工具类不允许创建实例。
+	 */
 	private CommandFactory() {
 	}
 
 	/**
-	 * @author ljj
-	 * @description 根据 RESP 数组创建本次请求对应的 Redis 命令对象。
-	 * @date 2026/7/14
-	 * @twopair
+	 * 根据 RESP 数组创建本次请求对应的 Redis 命令对象。
+	 *
+	 * @param respArray 客户端发送的 RESP 数组命令
+	 * @return 完成参数注入的命令对象
+	 * @throws IllegalArgumentException 当命令数组为空、命令名非法或命令不受支持时抛出
 	 */
 	public static Command from(RespArray respArray) {
 		if (respArray == null
@@ -106,14 +109,12 @@ public class CommandFactory {
 	}
 
 	/**
-	 * Validates the first element of the provided RESP array as a command name and returns the
-	 * command name in uppercase UTF-8 format.
+	 * 校验 RESP 数组首元素并将其解析为命令名。
 	 *
-	 * @param array the array of RESP objects to validate, where the first element is expected
-	 *              to be a BulkString containing the command name.
-	 * @return the validated command name in uppercase UTF-8 format.
-	 * @throws IllegalArgumentException if the first element of the array is not a BulkString,
-	 *                                  or if the command name is null, empty, or invalid.
+	 * @param array 客户端发送的 RESP 数组，首元素必须是 {@link BulkString}
+	 * @return 转换为大写后的 UTF-8 命令名
+	 * @throws IllegalArgumentException 当首元素不是 {@link BulkString}，
+	 *                                  或命令名为 {@code null}、空内容时抛出
 	 */
 	private static String validateAndGetCommandName(Resp[] array) {
 		if (!(array[0] instanceof BulkString commandNameBulkString)) {

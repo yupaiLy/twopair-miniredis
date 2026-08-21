@@ -25,13 +25,13 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
+ * MiniRedis Netty 服务，负责 TCP 监听、Pipeline 组装和生命周期管理。
+ *
  * @author ljj
- * @description MiniRedis Netty 服务，负责 TCP 监听、Pipeline 组装和生命周期管理。
- * @date 2026/7/15
- * @twopair
  */
 public class RedisServer implements AutoCloseable {
 	private static final Logger LOGGER = LoggerFactory.getLogger(RedisServer.class);
+	/** MiniRedis默认监听端口。 */
 	public static final int DEFAULT_PORT = 6378;
 	private static final long DEFAULT_CLEANUP_INTERVAL_MILLIS = 1000L;
 
@@ -57,7 +57,9 @@ public class RedisServer implements AutoCloseable {
 
 	private ScheduledFuture<?> expirationCleanupTask;
 
+	/** 默认AOF文件路径。 */
 	public static final Path DEFAULT_AOF_PATH = Path.of("data", "appendonly.aof");
+	/** 默认AOF刷盘策略。 */
 	public static final AofFsyncPolicy DEFAULT_AOF_FSYNC_POLICY = AofFsyncPolicy.ALWAYS;
 
 	private final Path aofPath;
@@ -118,7 +120,7 @@ public class RedisServer implements AutoCloseable {
 	 * @param port                  服务监听端口
 	 * @param redisCore             Redis核心存储
 	 * @param cleanupIntervalMillis 过期清理间隔，单位为毫秒
-	 * @param aofPath               AOF文件路径；为null表示禁用AOF
+	 * @param aofPath               AOF文件路径；为 {@code null} 表示禁用AOF
 	 */
 	RedisServer(int port, RedisCore redisCore, long cleanupIntervalMillis, Path aofPath) {
 		this(port, redisCore, cleanupIntervalMillis, aofPath, DEFAULT_AOF_FSYNC_POLICY);
@@ -130,7 +132,7 @@ public class RedisServer implements AutoCloseable {
 	 * @param port                  服务监听端口
 	 * @param redisCore             Redis核心存储
 	 * @param cleanupIntervalMillis 过期清理间隔，单位为毫秒
-	 * @param aofPath               AOF文件路径；为null表示禁用AOF
+	 * @param aofPath               AOF文件路径；为 {@code null} 表示禁用AOF
 	 * @param aofFsyncPolicy        AOF刷盘策略
 	 */
 	RedisServer(int port, RedisCore redisCore, long cleanupIntervalMillis, Path aofPath, AofFsyncPolicy aofFsyncPolicy) {
@@ -202,6 +204,9 @@ public class RedisServer implements AutoCloseable {
 			bootstrap.group(bossGroup, workerGroup)
 					.channel(NioServerSocketChannel.class)
 					.childHandler(new ChannelInitializer<SocketChannel>() {
+						/**
+						 * {@inheritDoc}
+						 */
 						@Override
 						protected void initChannel(SocketChannel channel) {
 							RedisPipeline.configure(channel.pipeline(), redisCore, aofPersistence);
@@ -261,20 +266,14 @@ public class RedisServer implements AutoCloseable {
 	}
 
 	/**
-	 * @author ljj
-	 * @description 保留符合服务语义的停止方法。
-	 * @date 2026/7/16
-	 * @twopair
+	 * 停止服务，语义上等价于 {@link #close()}。
 	 */
 	public void stop() {
 		close();
 	}
 
 	/**
-	 * @author ljj
-	 * @description 幂等关闭服务端 Channel 和 Netty 线程组。
-	 * @date 2026/7/16
-	 * @twopair
+	 * 幂等关闭服务端 Channel 和 Netty 线程组。
 	 */
 	@Override
 	public void close() {
@@ -333,10 +332,7 @@ public class RedisServer implements AutoCloseable {
 
 
 	/**
-	 * @author ljj
-	 * @description 阻塞当前调用线程，直到服务端 Channel 被关闭。
-	 * @date 2026/7/16
-	 * @twopair
+	 * 阻塞当前调用线程，直到服务端 Channel 被关闭。
 	 */
 	public void blockUntilShutdown() {
 		if (serverChannel == null) {

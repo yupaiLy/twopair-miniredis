@@ -12,16 +12,18 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
+ * 实现Redis的SREM命令，删除Set中的一个或多个成员。
+ *
  * @author ljj
- * @description 实现Redis的SREM命令，删除Set中的一个或多个成员。
- * @date 2026/8/19
- * @twopair
  */
 public class SRem implements WriteCommand {
 
 	private BytesWrapper key;
 	private List<BytesWrapper> members;
 
+	/**
+	 * {@inheritDoc}
+	 */
 	@Override
 	public CommandType type() {
 		return CommandType.SREM;
@@ -31,6 +33,7 @@ public class SRem implements WriteCommand {
 	 * 解析SREM命令参数。
 	 *
 	 * @param array 命令数组，格式为SREM key member [member ...]
+	 * @throws IllegalArgumentException 当参数数量、类型或内容不合法时抛出
 	 */
 	@Override
 	public void setContent(Resp[] array) {
@@ -67,6 +70,9 @@ public class SRem implements WriteCommand {
 		this.members = parsedMembers;
 	}
 
+	/**
+	 * {@inheritDoc}
+	 */
 	@Override
 	public Resp handle(RedisCore redisCore) {
 		return new RespInt(redisCore.removeSetMembers(key, members));

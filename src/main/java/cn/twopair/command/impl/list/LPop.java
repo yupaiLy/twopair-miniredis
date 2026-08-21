@@ -8,15 +8,17 @@ import cn.twopair.resp.BulkString;
 import cn.twopair.resp.Resp;
 
 /**
+ * 实现Redis的LPOP命令，从列表头部弹出一个元素。
+ *
  * @author ljj
- * @description 实现Redis的LPOP命令，从列表头部弹出一个元素。
- * @date 2026/8/18
- * @twopair
  */
 public class LPop implements WriteCommand {
 
 	private BytesWrapper key;
 
+	/**
+	 * {@inheritDoc}
+	 */
 	@Override
 	public CommandType type() {
 		return CommandType.LPOP;
@@ -26,6 +28,7 @@ public class LPop implements WriteCommand {
 	 * 解析LPOP命令参数。
 	 *
 	 * @param array 命令数组，格式为LPOP key
+	 * @throws IllegalArgumentException 当参数数量、类型或内容不合法时抛出
 	 */
 	@Override
 	public void setContent(Resp[] array) {
@@ -46,6 +49,9 @@ public class LPop implements WriteCommand {
 		this.key = parsedKey;
 	}
 
+	/**
+	 * {@inheritDoc}
+	 */
 	@Override
 	public Resp handle(RedisCore redisCore) {
 		BytesWrapper element = redisCore.leftPop(key);

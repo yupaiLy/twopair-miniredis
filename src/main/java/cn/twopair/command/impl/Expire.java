@@ -14,21 +14,29 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 /**
+ * 为指定key设置过期秒数的EXPIRE命令。
+ *
  * @author ljj
- * @description 为指定key设置过期秒数的EXPIRE命令。
- * @date 2026/7/16
- * @twopair
  */
 public class Expire implements WriteCommand {
 
 	private BytesWrapper key;
 	private long seconds;
 
+	/**
+	 * {@inheritDoc}
+	 */
 	@Override
 	public CommandType type() {
 		return CommandType.EXPIRE;
 	}
 
+	/**
+	 * 解析EXPIRE命令参数。
+	 *
+	 * @param array 命令数组，格式为EXPIRE key seconds
+	 * @throws IllegalArgumentException 当参数数量、类型或内容不合法时抛出
+	 */
 	@Override
 	public void setContent(Resp[] array) {
 		if (array == null || array.length != 3) {
@@ -52,12 +60,12 @@ public class Expire implements WriteCommand {
 	}
 
 	/**
-	 * Validates the provided key and seconds arguments, and parses the seconds into a long.
+	 * 校验key和seconds参数，并把seconds解析为 {@code long}。
 	 *
-	 * @param parsedKey The parsed key wrapped in a {@code BytesWrapper}. Must not be null or contain null byte arrays.
-	 * @param secondsBulkString The seconds argument wrapped in a {@code BulkString}. Must not be null or contain null byte arrays.
-	 * @return The parsed seconds as a {@code long}.
-	 * @throws IllegalArgumentException if the key is null, the seconds argument is null, or the seconds cannot be parsed as a valid long.
+	 * @param parsedKey        解析出的key，不能为 {@code null} 且内部字节数组不能为 {@code null}
+	 * @param secondsBulkString 秒数参数，不能为 {@code null} 且内部内容不能为 {@code null}
+	 * @return 解析得到的秒数
+	 * @throws IllegalArgumentException 当key为空值、seconds为空值或不是合法整数时抛出
 	 */
 	private static long validateAndParseSeconds(BytesWrapper parsedKey, BulkString secondsBulkString) {
 		BytesWrapper secondsBytes = secondsBulkString.getBytesWrapper();
@@ -117,6 +125,9 @@ public class Expire implements WriteCommand {
 		return List.of(expireAtCommand);
 	}
 
+	/**
+	 * {@inheritDoc}
+	 */
 	@Override
 	public Resp handle(RedisCore redisCore) {
 		boolean success = redisCore.expire(key, seconds);

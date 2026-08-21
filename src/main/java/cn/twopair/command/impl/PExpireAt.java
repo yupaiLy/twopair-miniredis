@@ -9,16 +9,18 @@ import cn.twopair.resp.Resp;
 import cn.twopair.resp.RespInt;
 
 /**
+ * 实现PEXPIREAT命令，为key设置绝对毫秒过期时间。
+ *
  * @author ljj
- * @description 实现PEXPIREAT命令，为key设置绝对毫秒过期时间。
- * @date 2026/8/18
- * @twopair
  */
 public class PExpireAt implements WriteCommand {
 
 	private BytesWrapper key;
 	private long expireAtMillis;
 
+	/**
+	 * {@inheritDoc}
+	 */
 	@Override
 	public CommandType type() {
 		return CommandType.PEXPIREAT;
@@ -73,6 +75,9 @@ public class PExpireAt implements WriteCommand {
 		this.expireAtMillis = parsedExpireAt;
 	}
 
+	/**
+	 * {@inheritDoc}
+	 */
 	@Override
 	public Resp handle(RedisCore redisCore) {
 		boolean success = redisCore.expireAt(key, expireAtMillis);

@@ -14,10 +14,9 @@ import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 
 /**
+ * 根据刷盘策略协调AOF追加、后台刷盘和关闭生命周期。
+ *
  * @author ljj
- * @description 根据刷盘策略协调AOF追加、后台刷盘和关闭生命周期。
- * @date 2026/8/20
- * @twopair
  */
 public final class AofPersistence implements AutoCloseable {
 
@@ -38,6 +37,7 @@ public final class AofPersistence implements AutoCloseable {
 	 *
 	 * @param path   AOF文件路径
 	 * @param policy AOF刷盘策略
+	 * @throws NullPointerException path或policy为 {@code null} 时抛出
 	 * @throws IOException AOF文件打开失败时抛出
 	 */
 	public AofPersistence(Path path, AofFsyncPolicy policy) throws IOException {
@@ -53,6 +53,7 @@ public final class AofPersistence implements AutoCloseable {
 	 * @param storage             AOF底层存储
 	 * @param policy              AOF刷盘策略
 	 * @param fsyncIntervalMillis 后台刷盘间隔，单位为毫秒
+	 * @throws NullPointerException storage或policy为 {@code null} 时抛出
 	 * @throws IllegalArgumentException 刷盘间隔小于等于0时抛出
 	 */
 	AofPersistence(AofStorage storage, AofFsyncPolicy policy, long fsyncIntervalMillis) {
@@ -83,6 +84,7 @@ public final class AofPersistence implements AutoCloseable {
 	 * 由后台任务定期执行刷盘。
 	 *
 	 * @param commands 需要追加的AOF命令
+	 * @throws NullPointerException     commands为 {@code null} 时抛出
 	 * @throws IOException           文件写入、立即刷盘或后台刷盘失败时抛出
 	 * @throws IllegalStateException 协调器已经关闭时抛出
 	 */
@@ -183,6 +185,7 @@ public final class AofPersistence implements AutoCloseable {
 	 * @param path   AOF文件路径
 	 * @param policy AOF刷盘策略
 	 * @return 已打开的AOF底层存储
+	 * @throws NullPointerException path或policy为 {@code null} 时抛出
 	 * @throws IOException AOF文件打开失败时抛出
 	 */
 	private static AofStorage openStorage(Path path, AofFsyncPolicy policy) throws IOException {

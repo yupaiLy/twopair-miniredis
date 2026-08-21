@@ -14,10 +14,9 @@ import java.util.List;
 import java.util.Locale;
 
 /**
+ * 实现SCAN命令，支持游标分页、MATCH过滤和COUNT数量提示。
+ *
  * @author ljj
- * @description 实现SCAN命令，支持游标分页、MATCH过滤和COUNT数量提示。
- * @date 2026/8/19
- * @twopair
  */
 public class Scan implements Command {
 
@@ -25,6 +24,9 @@ public class Scan implements Command {
 	private String matchPattern = "*";
 	private long count = 10L;
 
+	/**
+	 * {@inheritDoc}
+	 */
 	@Override
 	public CommandType type() {
 		return CommandType.SCAN;
@@ -34,6 +36,7 @@ public class Scan implements Command {
 	 * 解析SCAN命令参数。
 	 *
 	 * @param array 命令数组，格式为SCAN cursor [MATCH pattern] [COUNT count]
+	 * @throws IllegalArgumentException 当参数数量、类型或内容不合法时抛出
 	 */
 	@Override
 	public void setContent(Resp[] array) {
@@ -76,6 +79,9 @@ public class Scan implements Command {
 		this.count = parsedCount;
 	}
 
+	/**
+	 * {@inheritDoc}
+	 */
 	@Override
 	public Resp handle(RedisCore redisCore) {
 		List<BytesWrapper> matchedKeys = new ArrayList<>();
@@ -169,7 +175,7 @@ public class Scan implements Command {
 	 *
 	 * @param pattern 匹配表达式
 	 * @param value   key文本
-	 * @return 匹配成功时返回true
+	 * @return 匹配成功时返回 {@code true}
 	 */
 	private boolean globMatches(String pattern, String value) {
 		int patternIndex = 0;

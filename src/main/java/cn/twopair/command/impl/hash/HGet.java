@@ -8,16 +8,18 @@ import cn.twopair.resp.BulkString;
 import cn.twopair.resp.Resp;
 
 /**
+ * 实现Redis的HGET命令，读取Hash中的指定字段。
+ *
  * @author ljj
- * @description 实现Redis的HGET命令，读取Hash中的指定字段。
- * @date 2026/8/19
- * @twopair
  */
 public class HGet implements Command {
 
 	private BytesWrapper key;
 	private BytesWrapper field;
 
+	/**
+	 * {@inheritDoc}
+	 */
 	@Override
 	public CommandType type() {
 		return CommandType.HGET;
@@ -27,6 +29,7 @@ public class HGet implements Command {
 	 * 解析HGET命令参数。
 	 *
 	 * @param array 命令数组，格式为HGET key field
+	 * @throws IllegalArgumentException 当参数数量、类型或内容不合法时抛出
 	 */
 	@Override
 	public void setContent(Resp[] array) {
@@ -49,6 +52,9 @@ public class HGet implements Command {
 		this.field = parsedField;
 	}
 
+	/**
+	 * {@inheritDoc}
+	 */
 	@Override
 	public Resp handle(RedisCore redisCore) {
 		BytesWrapper value = redisCore.getHashField(key, field);

@@ -12,16 +12,18 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
+ * 实现Redis的HSET命令，向Hash批量写入字段和值。
+ *
  * @author ljj
- * @description 实现Redis的HSET命令，向Hash批量写入字段和值。
- * @date 2026/8/19
- * @twopair
  */
 public class HSet implements WriteCommand {
 
 	private BytesWrapper key;
 	private Map<BytesWrapper, BytesWrapper> fields;
 
+	/**
+	 * {@inheritDoc}
+	 */
 	@Override
 	public CommandType type() {
 		return CommandType.HSET;
@@ -31,6 +33,7 @@ public class HSet implements WriteCommand {
 	 * 解析HSET命令参数。
 	 *
 	 * @param array 命令数组，格式为HSET key field value [field value ...]
+	 * @throws IllegalArgumentException 当参数数量、类型或内容不合法时抛出
 	 */
 	@Override
 	public void setContent(Resp[] array) {
@@ -70,6 +73,9 @@ public class HSet implements WriteCommand {
 		this.fields = parsedFields;
 	}
 
+	/**
+	 * {@inheritDoc}
+	 */
 	@Override
 	public Resp handle(RedisCore redisCore) {
 		return new RespInt(redisCore.putHashFields(key, fields));

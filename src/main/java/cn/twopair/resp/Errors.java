@@ -4,13 +4,15 @@ import lombok.AllArgsConstructor;
 import lombok.Getter;
 
 /**
+ * RESP错误类型
+ *
  * @author ljj
- * @description RESP错误类型
- * @date 2026/4/10
- * @twopair
  */
 @Getter
 @AllArgsConstructor
 public class Errors implements Resp {
+	/**
+	 * 错误信息内容
+	 */
 	private final String content;
 }

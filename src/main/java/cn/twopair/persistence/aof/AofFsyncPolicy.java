@@ -3,10 +3,9 @@ package cn.twopair.persistence.aof;
 import java.util.Locale;
 
 /**
+ * 定义AOF刷盘策略，并负责解析外部配置值。
+ *
  * @author ljj
- * @description 定义AOF刷盘策略，并负责解析外部配置值。
- * @date 2026/8/20
- * @twopair
  */
 public enum AofFsyncPolicy {
 

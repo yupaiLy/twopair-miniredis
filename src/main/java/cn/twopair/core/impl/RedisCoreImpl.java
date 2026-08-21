@@ -14,10 +14,9 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.LongSupplier;
 
 /**
+ * Redis核心实现类
+ *
  * @author ljj
- * @description Redis核心实现类
- * @date 2026/4/9
- * @twopair
  */
 public class RedisCoreImpl implements RedisCore {
 	private static final Logger LOGGER = LoggerFactory.getLogger(RedisCoreImpl.class);
@@ -25,26 +24,22 @@ public class RedisCoreImpl implements RedisCore {
 	/**
 	 * 提供当前毫秒时间。
 	 *
-	 * <p>生产环境使用 System.currentTimeMillis，
+	 * <p>生产环境使用 {@code System.currentTimeMillis}，
 	 * 测试环境可以注入可控时间。
 	 */
 	private final LongSupplier currentTimeMillis;
 
 	/**
-	 * @author ljj
-	 * @description 创建使用系统时间的 RedisCore。
-	 * @date 2026/7/16
-	 * @twopair
+	 * 创建使用系统时间的 {@link RedisCore} 实现。
 	 */
 	public RedisCoreImpl() {
 		this(System::currentTimeMillis);
 	}
 
 	/**
-	 * @author ljj
-	 * @description 创建使用指定时间源的 RedisCore。
-	 * @date 2026/7/16
-	 * @twopair
+	 * 创建使用指定时间源的 {@link RedisCore} 实现。
+	 *
+	 * @param currentTimeMillis 提供当前毫秒时间的时间源，不能为 {@code null}
 	 */
 	public RedisCoreImpl(LongSupplier currentTimeMillis) {
 		this.currentTimeMillis = Objects.requireNonNull(
@@ -53,16 +48,19 @@ public class RedisCoreImpl implements RedisCore {
 		);
 	}
 
+	/**
+	 * {@inheritDoc}
+	 */
 	@Override
 	public void put(BytesWrapper key, RedisData value) {
 		map.put(key, value);
 	}
 
 	/**
-	 * 获取数据同时检测数据是否过期（惰性删除）
+	 * 获取数据同时检测数据是否过期（惰性删除）。
 	 *
 	 * @param key 键
-	 * @return 值
+	 * @return 对应的数据；key不存在或已过期时返回 {@code null}
 	 */
 	@Override
 	public RedisData get(BytesWrapper key) {
@@ -94,6 +92,9 @@ public class RedisCoreImpl implements RedisCore {
 
 	}
 
+	/**
+	 * {@inheritDoc}
+	 */
 	@Override
 	public boolean exist(BytesWrapper key) {
 		// 直接调用获取方法
@@ -145,10 +146,11 @@ public class RedisCoreImpl implements RedisCore {
 	}
 
 	/**
-	 * @author ljj
-	 * @description 为存在的 key 设置过期时间，非正数表示立即删除。
-	 * @date 2026/7/16
-	 * @twopair
+	 * 为存在的 key 设置过期时间，非正数表示立即删除。
+	 *
+	 * @param key     需要设置过期时间的key
+	 * @param seconds 过期秒数
+	 * @return key存在并成功处理时返回 {@code true}
 	 */
 	@Override
 	public boolean expire(BytesWrapper key, long seconds) {
@@ -199,7 +201,7 @@ public class RedisCoreImpl implements RedisCore {
 	 *
 	 * @param key 需要设置过期时间的key
 	 * @param expireAtMillis 绝对毫秒时间戳
-	 * @return key存在并成功处理时返回true
+	 * @return key存在并成功处理时返回 {@code true}
 	 */
 	@Override
 	public boolean expireAt(BytesWrapper key, long expireAtMillis) {
@@ -228,6 +230,9 @@ public class RedisCoreImpl implements RedisCore {
 		return success.get();
 	}
 
+	/**
+	 * {@inheritDoc}
+	 */
 	@Override
 	public long ttl(BytesWrapper key) {
 		while (true) {
@@ -266,6 +271,9 @@ public class RedisCoreImpl implements RedisCore {
 		}
 	}
 
+	/**
+	 * {@inheritDoc}
+	 */
 	@Override
 	public long leftPush(BytesWrapper key, List<BytesWrapper> elements) {
 		Objects.requireNonNull(key, "列表key不能为空");
@@ -304,6 +312,9 @@ public class RedisCoreImpl implements RedisCore {
 		return resultLength.get();
 	}
 
+	/**
+	 * {@inheritDoc}
+	 */
 	@Override
 	public BytesWrapper leftPop(BytesWrapper key) {
 		Objects.requireNonNull(key, "列表key不能为空");
@@ -335,6 +346,9 @@ public class RedisCoreImpl implements RedisCore {
 		return poppedElement.get();
 	}
 
+	/**
+	 * {@inheritDoc}
+	 */
 	@Override
 	public long listLength(BytesWrapper key) {
 		Objects.requireNonNull(key, "列表key不能为空");
@@ -359,6 +373,9 @@ public class RedisCoreImpl implements RedisCore {
 		return resultLength.get();
 	}
 
+	/**
+	 * {@inheritDoc}
+	 */
 	@Override
 	public List<BytesWrapper> listRange(BytesWrapper key, long start, long stop) {
 		Objects.requireNonNull(key, "列表key不能为空");
@@ -383,6 +400,9 @@ public class RedisCoreImpl implements RedisCore {
 		return result.get();
 	}
 
+	/**
+	 * {@inheritDoc}
+	 */
 	@Override
 	public long putHashFields(BytesWrapper key, Map<BytesWrapper, BytesWrapper> fields) {
 		Objects.requireNonNull(key, "Hash的key不能为空");
@@ -421,6 +441,9 @@ public class RedisCoreImpl implements RedisCore {
 		return addedCount.get();
 	}
 
+	/**
+	 * {@inheritDoc}
+	 */
 	@Override
 	public BytesWrapper getHashField(BytesWrapper key, BytesWrapper field) {
 		Objects.requireNonNull(key, "Hash的key不能为空");
@@ -446,6 +469,9 @@ public class RedisCoreImpl implements RedisCore {
 		return result.get();
 	}
 
+	/**
+	 * {@inheritDoc}
+	 */
 	@Override
 	public long deleteHashFields(BytesWrapper key, List<BytesWrapper> fields) {
 		Objects.requireNonNull(key, "Hash的key不能为空");
@@ -482,6 +508,9 @@ public class RedisCoreImpl implements RedisCore {
 		return deletedCount.get();
 	}
 
+	/**
+	 * {@inheritDoc}
+	 */
 	@Override
 	public long getHashSize(BytesWrapper key) {
 		Objects.requireNonNull(key, "Hash的key不能为空");
@@ -506,6 +535,9 @@ public class RedisCoreImpl implements RedisCore {
 		return resultLength.get();
 	}
 
+	/**
+	 * {@inheritDoc}
+	 */
 	@Override
 	public List<Map.Entry<BytesWrapper, BytesWrapper>> scanHashEntries(BytesWrapper key) {
 		Objects.requireNonNull(key, "Hash的key不能为空");
@@ -529,6 +561,9 @@ public class RedisCoreImpl implements RedisCore {
 		return result.get();
 	}
 
+	/**
+	 * {@inheritDoc}
+	 */
 	@Override
 	public long addSetMembers(BytesWrapper key, List<BytesWrapper> members) {
 		Objects.requireNonNull(key, "Set的key不能为空");
@@ -567,6 +602,9 @@ public class RedisCoreImpl implements RedisCore {
 		return addedCount.get();
 	}
 
+	/**
+	 * {@inheritDoc}
+	 */
 	@Override
 	public long removeSetMembers(BytesWrapper key, List<BytesWrapper> members) {
 		Objects.requireNonNull(key, "Set的key不能为空");
@@ -603,6 +641,9 @@ public class RedisCoreImpl implements RedisCore {
 		return removedCount.get();
 	}
 
+	/**
+	 * {@inheritDoc}
+	 */
 	@Override
 	public boolean containsSetMember(BytesWrapper key, BytesWrapper member) {
 		Objects.requireNonNull(key, "Set的key不能为空");
@@ -628,6 +669,9 @@ public class RedisCoreImpl implements RedisCore {
 		return result.get();
 	}
 
+	/**
+	 * {@inheritDoc}
+	 */
 	@Override
 	public long getSetSize(BytesWrapper key) {
 		Objects.requireNonNull(key, "Set的key不能为空");
@@ -652,6 +696,9 @@ public class RedisCoreImpl implements RedisCore {
 		return resultSize.get();
 	}
 
+	/**
+	 * {@inheritDoc}
+	 */
 	@Override
 	public List<BytesWrapper> scanSetMembers(BytesWrapper key) {
 		Objects.requireNonNull(key, "Set的key不能为空");
@@ -678,7 +725,7 @@ public class RedisCoreImpl implements RedisCore {
 	/**
 	 * 获取当前所有未过期key的弱一致性快照。
 	 *
-	 * <p>ConcurrentHashMap的遍历不会阻塞并发读写，因此扫描期间新增或删除的key
+	 * <p>{@code ConcurrentHashMap}的遍历不会阻塞并发读写，因此扫描期间新增或删除的key
 	 * 不保证一定出现在本次结果中，这与Redis SCAN的弱一致性语义相符。</p>
 	 *
 	 * @return 按字节顺序排列的有效key列表
@@ -707,14 +754,14 @@ public class RedisCoreImpl implements RedisCore {
 	}
 
 	/**
-	 * Adds the specified key-value pair to the data store while setting an expiration time for the value.
-	 * The expiration time is defined in seconds and is translated to an absolute timestamp using the system's
-	 * or the specified time source.
+	 * 写入键值对并同时设置以秒为单位的过期时间。
 	 *
-	 * @param key     the key associated with the value being stored; must not be null
-	 * @param value   the value being stored; must not be null
-	 * @param seconds the expiration time in seconds; must be greater than zero
-	 * @throws IllegalArgumentException if the expiration time is less than or equal to zero
+	 * <p>秒数会基于当前时间源换算成绝对毫秒时间戳后再保存。
+	 *
+	 * @param key     需要写入的键，不能为 {@code null}
+	 * @param value   需要写入的值，不能为 {@code null}
+	 * @param seconds 过期秒数，必须大于0
+	 * @throws IllegalArgumentException 当 {@code seconds} 小于等于0时抛出
 	 */
 	@Override
 	public void putWithExpiration(BytesWrapper key, RedisData value, long seconds) {

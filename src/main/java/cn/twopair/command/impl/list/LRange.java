@@ -11,10 +11,9 @@ import cn.twopair.resp.RespArray;
 import java.util.List;
 
 /**
+ * 实现Redis的LRANGE命令，查询列表指定范围内的元素。
+ *
  * @author ljj
- * @description 实现Redis的LRANGE命令，查询列表指定范围内的元素。
- * @date 2026/8/18
- * @twopair
  */
 public class LRange implements Command {
 
@@ -22,6 +21,9 @@ public class LRange implements Command {
 	private long start;
 	private long stop;
 
+	/**
+	 * {@inheritDoc}
+	 */
 	@Override
 	public CommandType type() {
 		return CommandType.LRANGE;
@@ -31,6 +33,7 @@ public class LRange implements Command {
 	 * 解析LRANGE命令参数。
 	 *
 	 * @param array 命令数组，格式为LRANGE key start stop
+	 * @throws IllegalArgumentException 当参数数量、类型或内容不合法时抛出
 	 */
 	@Override
 	public void setContent(Resp[] array) {
@@ -72,6 +75,9 @@ public class LRange implements Command {
 		this.stop = parsedStop;
 	}
 
+	/**
+	 * {@inheritDoc}
+	 */
 	@Override
 	public Resp handle(RedisCore redisCore) {
 		List<BytesWrapper> elements = redisCore.listRange(key, start, stop);

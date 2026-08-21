@@ -3,10 +3,9 @@ package cn.twopair.datatype;
 import java.util.*;
 
 /**
+ * Redis列表值对象，封装列表元素和过期时间。
+ *
  * @author ljj
- * @description Redis列表值对象，封装列表元素和过期时间。
- * @date 2026/8/18
- * @twopair
  */
 public class RedisList implements RedisData {
 
@@ -41,7 +40,7 @@ public class RedisList implements RedisData {
 	/**
 	 * 从列表头部弹出一个元素。
 	 *
-	 * @return 头部元素；列表为空时返回null
+	 * @return 头部元素；列表为空时返回 {@code null}
 	 */
 	public synchronized BytesWrapper leftPop() {
 		return values.pollFirst();
@@ -107,11 +106,17 @@ public class RedisList implements RedisData {
 		return values.size();
 	}
 
+	/**
+	 * {@inheritDoc}
+	 */
 	@Override
 	public long timeout() {
 		return timeout;
 	}
 
+	/**
+	 * {@inheritDoc}
+	 */
 	@Override
 	public void setTimeout(long timeout) {
 		this.timeout = timeout;

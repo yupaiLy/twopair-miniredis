@@ -7,16 +7,33 @@ import java.util.List;
 import java.util.Map;
 
 /**
+ * Redis核心接口
+ *
  * @author ljj
- * @description Redis核心接口
- * @date 2026/4/9
- * @twopair
  */
 public interface RedisCore {
+	/**
+	 * 写入键值对，覆盖已有数据且不设置过期时间。
+	 *
+	 * @param key   键
+	 * @param value 需要写入的值
+	 */
 	void put(BytesWrapper key, RedisData value);
 
+	/**
+	 * 读取指定key的数据，读取时顺带完成惰性过期删除。
+	 *
+	 * @param key 键
+	 * @return 对应的数据；key不存在或已过期时返回 {@code null}
+	 */
 	RedisData get(BytesWrapper key);
 
+	/**
+	 * 判断key是否存在，已过期的数据在逻辑上等同于不存在。
+	 *
+	 * @param key 键
+	 * @return key存在时返回 {@code true}
+	 */
 	boolean exist(BytesWrapper key);
 
 	/**
@@ -24,14 +41,17 @@ public interface RedisCore {
 	 *
 	 * @param keys 需要删除的key
 	 * @return 实际删除的key数量
+	 * @throws NullPointerException     当 {@code keys} 或其中某个key为 {@code null} 时抛出
+	 * @throws IllegalArgumentException 当 {@code keys} 为空列表时抛出
 	 */
 	long delete(List<BytesWrapper> keys);
 
 	/**
-	 * @author ljj
-	 * @description 为指定 key 设置以秒为单位的过期时间。
-	 * @date 2026/7/16
-	 * @twopair
+	 * 为指定key设置以秒为单位的过期时间，非正数表示立即删除。
+	 *
+	 * @param key     需要设置过期时间的key
+	 * @param seconds 过期秒数
+	 * @return key存在并成功处理时返回 {@code true}
 	 */
 	boolean expire(BytesWrapper key, long seconds);
 
@@ -40,23 +60,25 @@ public interface RedisCore {
 	 *
 	 * @param key            需要设置过期时间的key
 	 * @param expireAtMillis 绝对毫秒时间戳
-	 * @return key存在并成功处理时返回true
+	 * @return key存在并成功处理时返回 {@code true}
 	 */
 	boolean expireAt(BytesWrapper key, long expireAtMillis);
 
 	/**
-	 * @author ljj
-	 * @description 查询指定 key 剩余的存活秒数。
-	 * @date 2026/7/16
-	 * @twopair
+	 * 查询指定key剩余的存活秒数。
+	 *
+	 * @param key 键
+	 * @return 剩余秒数；key不存在时返回 {@code -2}，key永久有效时返回 {@code -1}
 	 */
 	long ttl(BytesWrapper key);
 
 	/**
-	 * @author ljj
-	 * @description 一次写入数据及其以秒为单位的过期时间。
-	 * @date 2026/8/11
-	 * @twopair
+	 * 一次写入数据及其以秒为单位的过期时间。
+	 *
+	 * @param key     需要写入的键，不能为 {@code null}
+	 * @param value   需要写入的值，不能为 {@code null}
+	 * @param seconds 过期秒数，必须大于0
+	 * @throws IllegalArgumentException 当 {@code seconds} 小于等于0时抛出
 	 */
 	void putWithExpiration(BytesWrapper key, RedisData value, long seconds);
 
@@ -81,7 +103,7 @@ public interface RedisCore {
 	 * 原子地从列表头部弹出一个元素，列表为空后删除key。
 	 *
 	 * @param key 列表key
-	 * @return 弹出的元素；key不存在时返回null
+	 * @return 弹出的元素；key不存在时返回 {@code null}
 	 * @throws WrongTypeException key存在但不是列表时抛出
 	 */
 	BytesWrapper leftPop(BytesWrapper key);
@@ -121,7 +143,7 @@ public interface RedisCore {
 	 *
 	 * @param key   Hash的key
 	 * @param field 需要读取的字段
-	 * @return 字段值；key或field不存在时返回null
+	 * @return 字段值；key或field不存在时返回 {@code null}
 	 * @throws WrongTypeException key存在但不是Hash时抛出
 	 */
 	BytesWrapper getHashField(BytesWrapper key, BytesWrapper field);
@@ -179,7 +201,7 @@ public interface RedisCore {
 	 *
 	 * @param key    Set的key
 	 * @param member 需要判断的成员
-	 * @return 成员存在时返回true，key或成员不存在时返回false
+	 * @return 成员存在时返回 {@code true}，key或成员不存在时返回 {@code false}
 	 * @throws WrongTypeException key存在但不是Set时抛出
 	 */
 	boolean containsSetMember(BytesWrapper key, BytesWrapper member);
